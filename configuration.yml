@@ -1,0 +1,10 @@
+chip_number: 10
+
+workplace_width_amount: 5
+
+# full start ip is '192.168.4.2'
+const_ip_part: '192.168.4.'
+start_ip: 2
+
+# you can choose 2 options: 'scada' or 'human'
+use_case: 'scada'
