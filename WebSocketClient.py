@@ -21,7 +21,7 @@ class WebSocketClient(QThread):
     async def _talk(self) -> None:
         async with websockets.connect(self._uri, ping_timeout = 120) as websocket:          
             await websocket.send(
-                json.dumps({'cmd': 'Start Flashing', 'log': ''})
+                json.dumps({'cmd': 'Start Flashing', 'msg': ''})
             )
 
             while True:
@@ -30,11 +30,11 @@ class WebSocketClient(QThread):
                 # await websocket.send(
                 #     json.dumps({'cmd': 'Pong', 'log': ''})
                 # )
-                # if rx_data['cmd'] == 'Ping':
-                #     print("Ping!!!")
+                if rx_data['cmd'] == 'Ping':
+                    print("Ping!!!")
 
                 if rx_data['cmd'] == 'Log':
-                    self.progress.emit(rx_data['log'])
+                    self.progress.emit(rx_data['msg'])
                 elif rx_data['cmd'] == 'End Flashing':
                     break
 
