@@ -1,5 +1,4 @@
 import json
-import socket
 from typing import Union
 from pydantic import BaseModel
 import time
@@ -17,16 +16,27 @@ class ScadaData:
         Message             : str
         Info                : str
 
-    def __init__(self, **kwargs):
-        self._sim_data = self.SimModel(**kwargs)
+    def __init__(self, data: SimModel):
+        self._sim_data = self.SimModel(             
+                IMEI = '123456789',
+                KU = 1,
+                SWVersion = "1.0",
+                Result = True,
+                Error = "",
+                Command = "",
+                Message = "",
+                Info = ""
+            )
 
     @property
-    def ScadaData(self) -> bytes:
+    def Data(self) -> bytes:
+        print("getter")
         return bytes(self._sim_data.json().encode('ascii'))
     
-    @ScadaData.setter
-    def ScadaData(self, dataToSet: bytes):
-        self._sim_data = json.loads(str(dataToSet))
+    @Data.setter
+    def Data(self, dataToSet: bytes):
+        print("Setter")
+        self._sim_data = json.loads(dataToSet)
 
     def SetStartTime(self):
         time_string = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
