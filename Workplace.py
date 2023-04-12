@@ -2,15 +2,13 @@ import yaml
 from PyQt6.QtWidgets import (
     QVBoxLayout,
     QListWidget,
-    QComboBox,
+    QListWidgetItem,
     QLabel,
-    QTextEdit,
     QPushButton
 )
+from PyQt6.QtGui import QColor
 from PyQt6.QtCore import (
-    QThread,
     Qt,
-    QSize
 )
 from WebSocketClient import WebSocketClient
 
@@ -66,15 +64,24 @@ class Workplace(QVBoxLayout):
             self._number_of_points = 0
             self._status.setStyleSheet('background-color: gray')
 
-            self._rpi_thread = WebSocketClient(self.constIp + str(self.startIp + self._wpnumber))
+            self._rpi_thread = WebSocketClient(f'sim76prg{self._wpnumber+1}.local')
             self._rpi_thread.progress.connect(self._show_new_log)
             self._rpi_thread.finished.connect(self._change_status)
             self._rpi_thread.ping.connect(self._ping)
             self._rpi_thread.start()
 
 
-    def _show_new_log(self, log_msg:str):
-        self._logfield.addItem(log_msg)
+    def _show_new_log(self, log_level: str, log_msg:str):
+        item = QListWidgetItem(log_msg)
+        if log_level == 'LogOk':
+            item.setForeground(QColor('#7fc97f')) # green
+        if log_level == 'LogWarn':
+            item.setForeground(QColor('#ffff99')) # yellow
+        elif log_level == 'LogErr':
+            item.setForeground(QColor('#f00000')) # red
+            
+        self._logfield.addItem(item)
+        self._logfield.scrollToBottom()
 
     def _change_status(self, work_result:bool):
         if work_result:

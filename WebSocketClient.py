@@ -6,7 +6,7 @@ import json
 
 class WebSocketClient(QThread):
     finished = pyqtSignal(bool)
-    progress = pyqtSignal(str)
+    progress = pyqtSignal(str, str)
     ping = pyqtSignal()
 
     def __init__(self, ip:str, parent=None):
@@ -20,7 +20,8 @@ class WebSocketClient(QThread):
 
     async def _talk(self) -> None:
         try:
-            async with websockets.connect(self._uri) as websocket:          
+            async with websockets.connect(self._uri) as websocket:    
+                ping_task = asyncio.ensure_future(self._ping(websocket))
                 try:
                     await websocket.send(
                         json.dumps({'cmd': 'Start Flashing', 'msg': ''})
@@ -29,39 +30,37 @@ class WebSocketClient(QThread):
                     while True:
                         rx_data = json.loads(await websocket.recv())
 
-                        if rx_data['cmd'] == 'Ping':
-                            self.ping.emit()
-
-                        if rx_data['cmd'] == 'Log':
-                            self.progress.emit(rx_data['msg'])
+                        if str(rx_data['cmd']).find('Log') >= 0:
+                            self.progress.emit(rx_data['cmd'], rx_data['msg'])
                         elif rx_data['cmd'] == 'End Flashing':
                             if rx_data['msg'] == 'Ok':
                                 self.finished.emit(True)
                             else:
                                 self.finished.emit(False)
                             # print("END")
+                            ping_task.cancel()
                             break
                 except:
                     print("Error in recv or send")
                     self.finished.emit(False)  
+                    ping_task.cancel()
 
         except:
             print("Error while connecting")
             self.finished.emit(False)
-        
+            
+
+    async def _ping(self, websocket):
+        while True:
+            try:
+                pong_waiter = await websocket.ping()
+                await pong_waiter
+                self.ping.emit()
+            except:
+                print("Ping Error")
+
+            await asyncio.sleep(0.5)
+
     
     def run(self) -> None:
-        # print('lol')
-        asyncio.run(self._talk())
-
-        # self._loop.create_task(self._talk())
-
-        # try:
-        #     self._loop.run_until_complete()
-        # except:
-        #     pass
-
-        # print('kek')
-
-    # def stop(self) -> None:
-    #     self._loop.stop()        
+        asyncio.run(self._talk())    

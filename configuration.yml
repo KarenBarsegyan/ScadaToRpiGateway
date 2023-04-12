@@ -37,4 +37,4 @@ start_ip: 2
 #! -------------------------------------------------- !#
 
 # you can choose 2 options: 'scada' or 'human'
-use_case: 'scada'
+use_case: 'human'
