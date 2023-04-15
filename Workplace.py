@@ -21,8 +21,6 @@ class Workplace(QVBoxLayout):
         self.constIp = self._config['const_ip_part']
         self.startIp = self._config['start_ip']
         self.usecase = self._config['use_case']
-
-        self._buttonAlreadyClicked = False
         
         self._wpnumber = wp_number  # номер текущего рп
         self._uiAddWidgets()  # заполнение рабочего пространства
@@ -32,6 +30,7 @@ class Workplace(QVBoxLayout):
         self._uiAddLogField()
         self._uiAddStatusField()
         self._uiAddFlashButton()
+        self._create_websocket('Ping')
 
     def _uiAddLogField(self):
         self._logfield = QListWidget()
@@ -40,7 +39,7 @@ class Workplace(QVBoxLayout):
 
     def _uiAddStatusField(self):
         self._status = QLabel()
-        self._status.setText('Ожидание')
+        self._status.setText('Ожидание программатора')
         self._status.setStyleSheet('background-color: gray')
         self._status.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         font = self._status.font()
@@ -51,25 +50,40 @@ class Workplace(QVBoxLayout):
     def _uiAddFlashButton(self):
         self._button = QPushButton('Push to flash')
         self._button.clicked.connect(self._btnFlashClickedCallback)
+        self._button.setFlat(True)
 
         if self.usecase == 'human':
             self.addWidget(self._button)
 
     def _btnFlashClickedCallback(self):
-        if not self._buttonAlreadyClicked:
+        if not self._button.isFlat():
             self._button.setFlat(True)
-            self._buttonAlreadyClicked = True
             self._logfield.clear()
-            self._status.setText('В процессе    ')
-            self._number_of_points = 0
-            self._status.setStyleSheet('background-color: gray')
+            self._create_websocket('Start')
 
-            self._rpi_thread = WebSocketClient(f'sim76prg{self._wpnumber+1}.local')
-            self._rpi_thread.progress.connect(self._show_new_log)
-            self._rpi_thread.finished.connect(self._change_status)
-            self._rpi_thread.ping.connect(self._ping)
-            self._rpi_thread.start()
+    def _create_websocket(self, cmd):
+            if cmd == 'Start':
+                self._status.setText('В процессе    ')
+                self._number_of_points = 0
+                self._status.setStyleSheet('background-color: gray')
+                
+                self._rpi_thread = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 'Start')
+                self._rpi_thread.progress.connect(self._show_new_log)
+                self._rpi_thread.finished.connect(self._change_status)
+                self._rpi_thread.ping.connect(self._ping)
+                self._rpi_thread.start()
 
+            if cmd == 'Ping':
+                self._rpi_thread = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 'Ping')
+                self._rpi_thread.finished.connect(self._ping_ok)
+                self._rpi_thread.start()
+
+    def _ping_ok(self, work_result:bool):
+        if work_result:
+            self._status.setText('Программатор готов')
+            self._status.setStyleSheet('background-color: green')
+            self._button.setFlat(False)
+        
 
     def _show_new_log(self, log_level: str, log_msg:str):
         item = QListWidgetItem(log_msg)
@@ -91,7 +105,6 @@ class Workplace(QVBoxLayout):
             self._status.setText('Ошибка')
             self._status.setStyleSheet('background-color: red')
 
-        self._buttonAlreadyClicked = False
         self._button.setFlat(False)
         del(self._rpi_thread)
 
