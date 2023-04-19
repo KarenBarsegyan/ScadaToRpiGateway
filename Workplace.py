@@ -11,6 +11,7 @@ from PyQt6.QtCore import (
     Qt,
 )
 from WebSocketClient import WebSocketClient
+from ProgrammerClient import ScadaClient
 
 
 class Workplace(QVBoxLayout):
@@ -34,7 +35,6 @@ class Workplace(QVBoxLayout):
 
     def _uiAddLogField(self):
         self._logfield = QListWidget()
-        # self._logfield.setMaximumSize(QSize(1280, 320))
         self.addWidget(self._logfield)
 
     def _uiAddStatusField(self):
@@ -84,7 +84,6 @@ class Workplace(QVBoxLayout):
             self._status.setStyleSheet('background-color: green')
             self._button.setFlat(False)
         
-
     def _show_new_log(self, log_level: str, log_msg:str):
         item = QListWidgetItem(log_msg)
         if log_level == 'LogOk':
@@ -93,15 +92,25 @@ class Workplace(QVBoxLayout):
             item.setForeground(QColor('#ffff99')) # yellow
         elif log_level == 'LogErr':
             item.setForeground(QColor('#f00000')) # red
+
+        if 'Start flashing' in log_msg:
+            self._scada_client = ScadaClient(self._wpnumber+1)
+
+        if 'FW version:' in log_msg:
+            self._scada_client.SetFWVersion(log_msg[12:])
             
         self._logfield.addItem(item)
         self._logfield.scrollToBottom()
 
     def _change_status(self, work_result:bool):
         if work_result:
+            self._scada_client.Send('Success')
+
             self._status.setText('Успешно')
             self._status.setStyleSheet('background-color: green')
         else:
+            self._scada_client.Send('Error')
+
             self._status.setText('Ошибка')
             self._status.setStyleSheet('background-color: red')
 

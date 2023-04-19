@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QSize
 from Workplace import Workplace
 from ProgrammerServer import ScadaServer
+from ScadaDataTypes import ScadaData
 
 
 class MainWindow(QMainWindow):
@@ -57,9 +58,8 @@ class MainWindow(QMainWindow):
         self._scada_server_thread.finished.connect(self._delete_server)
         self._scada_server_thread.start()
 
-    def _choose_button(self, data: str):
-        print("Received Data:")
-        # print(data['IMEI'])
+    def _choose_button(self, data: ScadaData):
+        self._wp[int(data.sim_data.KU)-1]._btnFlashClickedCallback()
 
     def _delete_server(self):
         print("HEY LOL")
