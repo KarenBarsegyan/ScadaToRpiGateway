@@ -1,11 +1,20 @@
 import json
 import socket
 from ScadaDataTypes import ScadaData
+from PyQt6.QtCore import QThread, pyqtSignal
+import asyncio
+from async_timeout import timeout
 
-class ScadaClient:
-    def __init__(self, KU: int):
+class ScadaClient(QThread):
+    finished = pyqtSignal(bool)
+
+    def __init__(self, KU: int, parent=None):
+        QThread.__init__(self, parent)
+
+        self._messgae = []
+
         data_dict = {
-            "IMEI": "123456789",
+            "IMEI": "",
             "KU": KU,
             "SWVersion": "",
             "Result": True,
@@ -21,36 +30,44 @@ class ScadaClient:
     def SetFWVersion(self, SW):
         self._data_to_send.sim_data.SWVersion = SW
 
-    def Send(self, result):
+    def UpdateMessage(self, msg: str):
+        self._messgae.append(msg)
+
+    def SetResult(self, result: bool):
+        self._data_to_send.sim_data.Result = result
+
+    async def _send(self):
         self._data_to_send.SetEndTime()
 
-        if result == 'Success':
-            self._data_to_send.sim_data.Result = True
-        else:
-            self._data_to_send.sim_data.Result = False
-            self._data_to_send.sim_data.Message = result
+        self._data_to_send.sim_data.Message = str(self._messgae)
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            try:
-                sock.connect(('192.168.88.246', 8080))
-                sock.send(self._data_to_send.GetDataInBytes())
+            result = False
+            for i in range(5):
+                try:
+                    sock.connect(('192.168.88.246', 8080))
+                    sock.send(self._data_to_send.GetDataInBytes())
 
-                data_to_recv = sock.recv(1024)
+                    data_to_recv = sock.recv(1024)
 
-                if data_to_recv == self._data_to_send.GetDataInBytes():
-                    print("Send \ recv succesfully")
-            except Exception as ex:
-                print(ex)
+                    scada_data_recv = ScadaData()
+                    scada_data_recv.SetDataFromBytes(data_to_recv)
 
-    def _SendBytes(self, data_to_send) -> ScadaData:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create client socket
-        sock.connect(('127.0.0.1', 8080))  # connect to server socket
-        sock.send(data_to_send)  # send data
-        data = sock.recv(1024)  # read server answer
-        sock.close()  # close connection
-        return ScadaData(**json.loads(data)) # return Answer in ScadaData format
-    
+                    if scada_data_recv.GetDataInBytes() == self._data_to_send.GetDataInBytes():
+                        self.finished.emit(True)
+                        result = True
+                        break
+                except Exception as ex:
+                    print(ex)
+
+                await asyncio.sleep(1)
+
+            if not result:
+                self.finished.emit(False)
+
+    def run(self) -> None:
+        asyncio.run(self._send())    
 
 if __name__ == '__main__':
     cl = ScadaClient(1)
-    cl.Send('Success')
+    cl.run()
