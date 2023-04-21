@@ -12,7 +12,6 @@ class WebSocketClient(QThread):
     ping = pyqtSignal()
 
     def __init__(self, ip:str, cmd:str, parent=None):
-        print('NEW WORKPLACE')
         QThread.__init__(self, parent)
         self._uri = f"ws://{ip}:8000"
         self._ip = ip
@@ -21,7 +20,7 @@ class WebSocketClient(QThread):
         self._ping_error = 0
 
     def __del__(self):
-        print('WORKPLACE DELETED')
+        pass
 
     async def _talk(self) -> None:
         if self._cmd == 'Start':

@@ -22,6 +22,7 @@ class Workplace(QVBoxLayout):
         self.usecase = self._config['use_case']
         self._wpnumber = wp_number  # номер текущего рп
         self._scada_client = ScadaClient(self._wpnumber+1)
+        self._IMEI = ''
 
         self._uiAddWidgets()  # заполнение рабочего пространства
 
@@ -94,7 +95,7 @@ class Workplace(QVBoxLayout):
             self._status.setStyleSheet('background-color: green')
             self._button.setFlat(False)
 
-            self._scada_client.UpdateMessage('Ready To Start')
+            self._scada_client.UpdateInfo('Ready To Start')
             self._scada_send(True)
         
     def _show_new_log(self, log_level: str, log_msg:str):
@@ -103,10 +104,10 @@ class Workplace(QVBoxLayout):
             item.setForeground(QColor('#7fc97f')) # green
         if log_level == 'LogWarn':
             item.setForeground(QColor('#ffff99')) # yellow
-            self._scada_client.UpdateMessage(log_msg)
+            self._scada_client.UpdateInfo(log_msg)
         elif log_level == 'LogErr':
             item.setForeground(QColor('#f00000')) # red
-            self._scada_client.UpdateMessage(log_msg)
+            self._scada_client.UpdateInfo(log_msg)
 
         if 'Start flashing' in log_msg:
             self._scada_client = ScadaClient(self._wpnumber+1)
@@ -117,13 +118,19 @@ class Workplace(QVBoxLayout):
         self._logfield.addItem(item)
         self._logfield.scrollToBottom()
 
+    def _remeberIMEI(self, msg: str):
+        self._IMEI = msg
+
     def _change_status(self, work_result:bool):
+        self._scada_client.SetIMEI(self._IMEI)
         if work_result:
+            self._scada_client.SetCommand('FinishedOK')
             self._scada_send(True)
 
             self._status.setText('Успешно')
             self._status.setStyleSheet('background-color: green')
         else:
+            self._scada_client.SetCommand('FinishedNOK')
             self._scada_send(False)
 
             self._status.setText('Ошибка')

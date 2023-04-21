@@ -7,6 +7,7 @@ class ScadaData:
     class SimModel(BaseModel):
         IMEI                : str = ''
         KU                  : int = 0
+        ProgrammingsCnt     : int = 0
         SWVersion           : str = ''
         StartProgramming    : str = ''
         EndProgramming      : str = ''

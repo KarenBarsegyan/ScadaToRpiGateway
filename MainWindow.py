@@ -21,11 +21,12 @@ class MainWindow(QMainWindow):
         self._usecase = self._config['use_case']
         # настройка главного окна
         self.setWindowTitle('Программатор SIMCOM7600')
-        self.resize(QSize(1280, 720))
+        self.resize(QSize(720, 720))
         self._mainWidget = QWidget()
         self.setCentralWidget(self._mainWidget)
         self._mainLayout = QGridLayout()
         self._mainWidget.setLayout(self._mainLayout)
+        self.showMaximized()
 
         self._group = []      # список рабочих групп (рамок с подписью "Рабочее место №")
         self._wp = []         # список рабочих пространств для взаимодействия с модемом
@@ -59,7 +60,9 @@ class MainWindow(QMainWindow):
         self._scada_server_thread.start()
 
     def _choose_button(self, data: ScadaData):
-        self._wp[int(data.sim_data.KU)-1]._btnFlashClickedCallback()
+        wp_num = int(data.sim_data.KU)-1
+        self._wp[wp_num]._remeberIMEI(data.sim_data.IMEI)
+        self._wp[wp_num]._btnFlashClickedCallback()
 
     def _delete_server(self):
         print("HEY LOL")

@@ -30,7 +30,10 @@ class ScadaServer(QThread):
 
                             scada_data = ScadaData()
                             scada_data.SetDataFromBytes(recv_data)
-                            self.progress.emit(scada_data)
+
+                            if scada_data.sim_data.Command == 'Start':
+                                scada_data.sim_data.Message = 'Started'
+                                self.progress.emit(scada_data)
 
                             conn.send(scada_data.GetDataInBytes())
 
