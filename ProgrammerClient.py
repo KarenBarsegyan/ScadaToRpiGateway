@@ -4,6 +4,15 @@ from ScadaDataTypes import ScadaData
 from PyQt5.QtCore import QThread, pyqtSignal
 import asyncio
 from async_timeout import timeout
+import logging
+
+logger = logging.getLogger(__name__)
+f_handler = logging.FileHandler(f'logs/{__name__}.log')
+f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+f_handler.setFormatter(f_format)
+logger.addHandler(f_handler)
+logger.setLevel(logging.WARNING)
+
 
 class ScadaClient(QThread):
     finished = pyqtSignal(bool)
@@ -66,7 +75,7 @@ class ScadaClient(QThread):
                     result = True
                     break
                 except Exception as ex:
-                    print(ex)
+                    logger.warning(ex)
 
                 await asyncio.sleep(1)
 

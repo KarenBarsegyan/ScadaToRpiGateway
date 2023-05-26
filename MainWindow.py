@@ -126,7 +126,6 @@ class MainWindow(QMainWindow):
         if self._usecase == 'scada':
             self._scada_server_thread = ScadaServer()
             self._scada_server_thread.progress.connect(self._choose_wp)
-            self._scada_server_thread.finished.connect(self._delete_server)
             self._scada_server_thread.start()
 
     def _choose_wp(self, data: ScadaData):
