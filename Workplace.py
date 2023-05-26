@@ -1,36 +1,48 @@
 import yaml
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QVBoxLayout,
     QListWidget,
     QListWidgetItem,
     QLabel,
     QPushButton
 )
-from PyQt6.QtGui import QColor
-from PyQt6.QtCore import (
+from PyQt5.QtGui import QColor
+from PyQt5.QtCore import (
     Qt,
 )
-from WebSocketClient import WebSocketClient
+from WebSocketClient import *
 from ProgrammerClient import ScadaClient
+from ScadaDataTypes import ScadaData
+import logging
+
+
+logger = logging.getLogger(__name__)
+f_handler = logging.FileHandler(f'logs/{__name__}.log')
+f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+f_handler.setFormatter(f_format)
+logger.addHandler(f_handler)
+logger.setLevel(logging.WARNING)
 
 
 class Workplace(QVBoxLayout):
     def __init__(self, wp_number):
         super().__init__()
         self._number_of_points = 0
-        self._config = yaml.load(open("configuration.yml"), yaml.SafeLoader)
+        self._config = yaml.load(open("/home/pi/ScadaToRpiGateway/configuration.yml"), yaml.SafeLoader)
         self.usecase = self._config['use_case']
         self._wpnumber = wp_number  # номер текущего рп
         self._scada_client = ScadaClient(self._wpnumber+1)
         self._IMEI = ''
+        self._PrgCnt = ''
+        self._modemSystem = ''
+        self._pingingInProc = False
+        self._prg_in_proc = False
+        self.canceled_flag = False
 
-        self._uiAddWidgets()  # заполнение рабочего пространства
-
-    def _uiAddWidgets(self):
         self._uiAddLogField()
         self._uiAddStatusField()
         self._uiAddFlashButton()
-        self._create_websocket('Ping')
+        self._ping_rpi()
 
     def _uiAddLogField(self):
         self._logfield = QListWidget()
@@ -38,13 +50,22 @@ class Workplace(QVBoxLayout):
 
     def _uiAddStatusField(self):
         self._status = QLabel()
-        self._status.setText('Ожидание программатора')
+        self._status.setText(' --- ')
         self._status.setStyleSheet('background-color: gray')
         self._status.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         font = self._status.font()
         font.setPointSize(18)
         self._status.setFont(font)
         self.addWidget(self._status)
+
+        self._isReady = QLabel()
+        self._isReady.setText('Ожидание программатора')
+        self._isReady.setStyleSheet('background-color: gray')
+        self._isReady.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        font = self._isReady.font()
+        font.setPointSize(18)
+        self._isReady.setFont(font)
+        self.addWidget(self._isReady)
 
     def _uiAddFlashButton(self):
         self._button = QPushButton('Push to flash')
@@ -54,33 +75,66 @@ class Workplace(QVBoxLayout):
         if self.usecase == 'human':
             self.addWidget(self._button)
 
+    def _create_websocket(self):
+        self._prg_in_proc = True
+        self._status.setText('В процессе    ')
+        self._number_of_points = 0
+        self._status.setStyleSheet('background-color: gray')
+        
+        self._rpi_thread = QThread()
+        self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', self._modemSystem)
+        self._rpi_worker.moveToThread(self._rpi_thread)
+
+        self._rpi_thread.started.connect(self._rpi_worker.run)
+        self._rpi_worker.finished.connect(self._rpi_thread.quit)
+        self._rpi_worker.finished.connect(self._rpi_worker.deleteLater)
+        self._rpi_thread.finished.connect(self._rpi_thread.deleteLater)
+
+        self._rpi_worker.finished.connect(self._change_rpi_worker_status)
+        self._rpi_worker.progress.connect(self._show_new_log)
+        self._rpi_worker.status.connect(self._change_status)
+        self._rpi_worker.ping.connect(self._ping_callback)
+
+        self._rpi_thread.start()
+
+    def _change_rpi_worker_status(self):
+        self._prg_in_proc = False
+        if self.canceled_flag:
+            self.canceled_flag = False
+            self.clear_screen()
+        logger.info("Delete WS")
+
+    def _ping_rpi(self):
+        if not self._pingingInProc:
+            self._pingingInProc = True
+
+            self._rpi_ping_thread = QThread()
+            self._rpi_ping_worker = WebSocketClientChecker(f'sim7600prg{self._wpnumber+1}.local')
+            self._rpi_ping_worker.moveToThread(self._rpi_ping_thread)
+
+            self._rpi_ping_thread.started.connect(self._rpi_ping_worker.run)
+            self._rpi_ping_worker.finished.connect(self._rpi_ping_thread.quit)
+            self._rpi_ping_worker.finished.connect(self._rpi_ping_worker.deleteLater)
+            self._rpi_ping_thread.finished.connect(self._rpi_ping_thread.deleteLater)
+
+            self._rpi_ping_worker.finished.connect(self._change_rpi_ping_worker_status)
+            self._rpi_ping_worker.status.connect(self._ping_status_callback)
+
+            self._rpi_ping_thread.start()
+
+    def _change_rpi_ping_worker_status(self):
+        self._pingingInProc = False
+        logger.info("Delete WS Checker")
+
     def _btnFlashClickedCallback(self):
         if not self._button.isFlat():
             self._button.setFlat(True)
             self._logfield.clear()
-            self._create_websocket('Start')
+            self._create_websocket()
 
-    def _create_websocket(self, cmd):
-            if cmd == 'Start':
-                self._status.setText('В процессе    ')
-                self._number_of_points = 0
-                self._status.setStyleSheet('background-color: gray')
-                
-                self._rpi_thread = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 'Start')
-                self._rpi_thread.progress.connect(self._show_new_log)
-                self._rpi_thread.finished.connect(self._change_status)
-                self._rpi_thread.ping.connect(self._ping_callback)
-                self._rpi_thread.start()
-
-            if cmd == 'Ping':
-                self._rpi_thread = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 'Ping')
-                self._rpi_thread.finished.connect(self._start_ping_callback)
-                self._rpi_thread.start()
-
-    def _scada_send(self, result: bool):
+    def _scada_send(self):
         if self.usecase == 'scada':
             self._scada_client.finished.connect(self._scada_sended_callback)
-            self._scada_client.SetResult(result)
             self._scada_client.start()
 
     def _scada_sended_callback(self, res: bool):
@@ -89,21 +143,25 @@ class Workplace(QVBoxLayout):
         else:
             self._show_new_log('LogErr', 'Scada did not receive msg')
 
-    def _start_ping_callback(self, work_result:bool):
+    def _ping_status_callback(self, work_result:bool):
         if work_result:
-            self._status.setText('Программатор готов')
-            self._status.setStyleSheet('background-color: green')
+            self._isReady.setText('Программатор готов')
+            self._isReady.setStyleSheet('background-color: green')
             self._button.setFlat(False)
 
             self._scada_client.UpdateInfo('Ready To Start')
-            self._scada_send(True)
+            self._scada_send()
+        else:
+            self._isReady.setText('Ожидание программатора')
+            self._isReady.setStyleSheet('background-color: gray')
+            self._button.setFlat(True)
         
     def _show_new_log(self, log_level: str, log_msg:str):
         item = QListWidgetItem(log_msg)
         if log_level == 'LogOk':
             item.setForeground(QColor('#7fc97f')) # green
         if log_level == 'LogWarn':
-            item.setForeground(QColor('#ffff99')) # yellow
+            item.setForeground(QColor('#f0B030')) # yellow
             self._scada_client.UpdateInfo(log_msg)
         elif log_level == 'LogErr':
             item.setForeground(QColor('#f00000')) # red
@@ -118,26 +176,46 @@ class Workplace(QVBoxLayout):
         self._logfield.addItem(item)
         self._logfield.scrollToBottom()
 
-    def _remeberIMEI(self, msg: str):
-        self._IMEI = msg
+    def clear_screen(self):
+        if not self._prg_in_proc:
+            logger.info(f"Clear screen {self._wpnumber}")
+            self._logfield.clear()
+            self._status.setText(' --- ')
+            self._status.setStyleSheet('background-color: gray')
+            self._ping_rpi()
 
-    def _change_status(self, work_result:bool):
-        self._scada_client.SetIMEI(self._IMEI)
+    def cancel_task(self):
+        if self._prg_in_proc:
+            logger.info(f"Cancel task {self._wpnumber}")
+            try:
+                self._rpi_thread.terminate()
+                self.canceled_flag = True
+            except:
+                logger.error("Error in Cancel Task")
+
+    def _remeberScadaData(self, data: ScadaData):
+        self._scada_client.SetIMEI(data.sim_data.IMEI)
+        self._scada_client.SetPrgCnt(data.sim_data.ProgrammingsCnt)
+
+    def _change_status(self, work_result:bool):    
         if work_result:
             self._scada_client.SetCommand('FinishedOK')
-            self._scada_send(True)
+            self._scada_client.SetResult(True)
+            self._scada_send()
 
             self._status.setText('Успешно')
             self._status.setStyleSheet('background-color: green')
         else:
             self._scada_client.SetCommand('FinishedNOK')
-            self._scada_send(False)
+            self._scada_client.SetResult(False)
+            self._scada_send()
 
             self._status.setText('Ошибка')
             self._status.setStyleSheet('background-color: red')
 
         self._button.setFlat(False)
-        del(self._rpi_thread)
+
+        self._ping_rpi()
 
     def _ping_callback(self):
         if self._number_of_points == 0:
@@ -155,3 +233,6 @@ class Workplace(QVBoxLayout):
         elif self._number_of_points == 3:
             self._status.setText('В процессе ...')
             self._number_of_points = 0
+
+    def remeberModemSystem(self, system: str):
+        self._modemSystem = system

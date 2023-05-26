@@ -1,6 +1,6 @@
 import socket
 from ScadaDataTypes import ScadaData
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal
 
 class ScadaServer(QThread):
     finished = pyqtSignal(bool)
@@ -10,7 +10,6 @@ class ScadaServer(QThread):
         QThread.__init__(self, parent)
 
     def __del__(self):
-        print("__DEL__")
         self.sock.close()
 
     def run(self) -> None:

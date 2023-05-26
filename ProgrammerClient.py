@@ -1,7 +1,7 @@
 import json
 import socket
 from ScadaDataTypes import ScadaData
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal
 import asyncio
 from async_timeout import timeout
 
@@ -43,6 +43,9 @@ class ScadaClient(QThread):
     def SetIMEI(self, imei):
         self._data_to_send.sim_data.IMEI = imei
 
+    def SetPrgCnt(self, prgcnt):
+        self._data_to_send.sim_data.ProgrammingsCnt = prgcnt
+
     async def _send(self):
         self._data_to_send.SetEndTime()
 
@@ -59,7 +62,6 @@ class ScadaClient(QThread):
                     scada_data_recv = ScadaData()
                     scada_data_recv.SetDataFromBytes(data_to_recv)
 
-                    # if scada_data_recv.GetDataInBytes() == self._data_to_send.GetDataInBytes():
                     self.finished.emit(True)
                     result = True
                     break
