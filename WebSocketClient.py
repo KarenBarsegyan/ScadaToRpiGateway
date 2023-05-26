@@ -6,8 +6,9 @@ import json
 import logging 
 
 
+logs_path = "/home/pi/GatewayLogs"
 logger = logging.getLogger(__name__)
-f_handler = logging.FileHandler(f'logs/{__name__}.log')
+f_handler = logging.FileHandler(f'{logs_path}/{__name__}.log')
 f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 f_handler.setFormatter(f_format)
 logger.addHandler(f_handler)

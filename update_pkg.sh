@@ -34,7 +34,7 @@ chmod +x package/opt/StartGateWay/StartGateWay
 cd
 
 echo "--- Install ---"
-fpm -C package -s dir -t deb -n "StartGateWay" -v 0.1.0 -p StartGateWay.deb
+fpm -C package -s dir -t deb -n "StartGateWay" -v 0.2.0 -p StartGateWay.deb
 sudo dpkg -i StartGateWay.deb
 
 rm StartGateWay.deb
