@@ -14,6 +14,7 @@ from WebSocketClient import *
 from ProgrammerClient import ScadaClient
 from ScadaDataTypes import ScadaData
 import logging
+import json
 
 
 logs_path = "/home/pi/GatewayLogs"
@@ -81,9 +82,11 @@ class Workplace(QVBoxLayout):
         self._status.setText('В процессе    ')
         self._number_of_points = 0
         self._status.setStyleSheet('background-color: gray')
-        
+
+        factoryNum = self._getFactory()       
         self._rpi_thread = QThread()
-        self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', self._modemSystem)
+        self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 
+                                           self._modemSystem + '#' + factoryNum)
         self._rpi_worker.moveToThread(self._rpi_thread)
 
         self._rpi_thread.started.connect(self._rpi_worker.run)
@@ -97,6 +100,61 @@ class Workplace(QVBoxLayout):
         self._rpi_worker.ping.connect(self._ping_callback)
 
         self._rpi_thread.start()
+
+    def _getFactory(self) -> str:
+        result = 0
+        with open('factory_numbers') as json_file:
+            data = json.load(json_file)
+            result = data[self._wpnumber][1]
+        
+        result = self._dec_to_base(result)
+        if len(result) == 1:
+            result = "000" + result
+        elif len(result) == 2:
+            result = "00" + result
+        elif len(result) == 3:
+            result = "0" + result
+        elif len(result) == 4:
+            result = result
+        else:
+            logger.error("Factory Num Error")
+
+        string = ''
+        with open('factory_base') as file:
+            lines = file.readlines()
+            string = lines[0][:-1] + '#' + lines[1][:-5] + result
+
+        return string
+
+    def _dec_to_base(self, num):
+        base_num = ""
+        base34 = [ '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 
+                'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'J', 'K', 
+                'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 
+                'W', 'X', 'Y', 'Z' ]
+        
+        if num == 0:
+            return '0'
+
+        while num>0:
+            dig = int(num%34)
+            if dig<10:
+                base_num += str(dig)
+            else:
+                base_num += base34[dig]  #Using uppercase letters
+            num //= 34
+        base_num = base_num[::-1]  #To reverse the string
+        return base_num
+
+    def _updateFactory(self):
+        data = []
+        with open('factory_numbers') as json_file:
+            data = json.load(json_file)
+        
+        data[self._wpnumber][1] += 1
+
+        with open('factory_numbers', 'w') as outfile:
+            json.dump(data, outfile)
 
     def _change_rpi_worker_status(self):
         self._prg_in_proc = False
@@ -160,7 +218,7 @@ class Workplace(QVBoxLayout):
     def _show_new_log(self, log_level: str, log_msg:str):
         item = QListWidgetItem(log_msg)
         if log_level == 'LogOk':
-            item.setForeground(QColor('#7fc97f')) # green
+            item.setForeground(QColor('#7fb94f')) # green
         if log_level == 'LogWarn':
             item.setForeground(QColor('#f0B030')) # yellow
             self._scada_client.UpdateInfo(log_msg)
@@ -204,6 +262,8 @@ class Workplace(QVBoxLayout):
             self._scada_client.SetResult(True)
             self._scada_send()
 
+            self._updateFactory()
+
             self._status.setText('Успешно')
             self._status.setStyleSheet('background-color: green')
         else:
@@ -237,3 +297,8 @@ class Workplace(QVBoxLayout):
 
     def remeberModemSystem(self, system: str):
         self._modemSystem = system
+
+
+# if __name__ == '__main__':
+#     # for i in range(, 1000010):
+#     print(_getFactory())
