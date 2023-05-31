@@ -110,10 +110,12 @@ class WebSocketClient(QThread):
         except:
             logger.info("Another error in _ping")
 
-
     def run(self) -> None:
         asyncio.run(self._talk())    
-        self.finished.emit()  
+        try:
+            self.finished.emit()  
+        except Exception as ex:
+            logger.warning(f"Ex: {ex}") 
 
 class WebSocketClientChecker(QThread):
     finished = pyqtSignal()
@@ -183,4 +185,7 @@ class WebSocketClientChecker(QThread):
     
     def run(self) -> None:
         asyncio.run(self._talk()) 
-        self.finished.emit()    
+        try:
+            self.finished.emit()  
+        except Exception as ex:
+            logger.warning(f"Ex: {ex}") 

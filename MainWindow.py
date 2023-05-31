@@ -14,36 +14,12 @@ from PyQt5.QtCore import (
     Qt,
     QSize,
     QTimer,
-    QThread,
-    pyqtSignal
 )
 from Workplace import Workplace
 from ProgrammerServer import ScadaServer
 from ScadaDataTypes import ScadaData
-import subprocess
 import os
-
-
-class RebootRPI(QThread):
-    finished = pyqtSignal()
-
-    def __init__(self, chipQty):
-        super().__init__()
-        self.chipQty = chipQty
-
-    def run(self):
-        for i in range (self.chipQty):
-            try:
-                subprocess.run(
-                    f'sshpass -p raspberry ssh pi@sim7600prg{i+1}.local -o StrictHostKeyChecking=no sudo reboot',
-                    shell=True,
-                    capture_output=True,
-                    timeout=0.1
-                )
-            except Exception as ex:
-                pass
-
-        self.finished.emit()
+from FileBrowser import FileBrowser
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -53,9 +29,9 @@ class MainWindow(QMainWindow):
         self.chipQty = self._config['chip_number']
         self.wpWidth = self._config['workplace_width_amount']
         self._usecase = self._config['use_case']
+        self.firstChoice = True
 
-        self.setWindowTitle('Программатор SIMCOM7600')
-        self.resize(QSize(720, 720))
+        self.setWindowTitle('SIMCOM7600 Programmer')
         self._mainWidget = QWidget()
         self.setCentralWidget(self._mainWidget)
         self._mainLayout = QGridLayout()
@@ -65,15 +41,11 @@ class MainWindow(QMainWindow):
         self._simprgVersionWidget = QLineEdit(f"")
         self._simprgVersionWidget.setReadOnly(True)
         self._simprgVersionWidget.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self._simprgVersionWidget.setMaximumWidth(500)
 
-        self._modemSystemWidgetStr = QLineEdit(f"Modem System: ")
-        self._modemSystemWidgetStr.setReadOnly(True)
-        self._modemSystemWidgetStr.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        self._modemSystemWidget = QComboBox()
-        self._modemSystemWidget.textActivated.connect(self._updateModemSystem)
-
-        self._reloadButton = QPushButton("Reload Systems Lists")
-        self._reloadButton.clicked.connect(self._btnReloadClickedCallback)
+        self._modemSystemChoice = FileBrowser('Choose Modem System: ')
+        self._modemSystemChoice.setDefaultDir(r'/home/pi/apt-repo/system/')
+        self._modemSystemChoice.setCallBack(self._systemChoosenCallback)
 
         self._reloadPRIsButton = QPushButton("Reboot Raspberries")
         self._reloadPRIsButton.clicked.connect(self._btnReloadRPIsClickedCallback)
@@ -82,9 +54,7 @@ class MainWindow(QMainWindow):
         self._clearButton.clicked.connect(self._btnClearClickedCallback)
 
         self._settingsLayout.addWidget(self._simprgVersionWidget)
-        self._settingsLayout.addWidget(self._modemSystemWidgetStr)
-        self._settingsLayout.addWidget(self._modemSystemWidget)
-        self._settingsLayout.addWidget(self._reloadButton)
+        self._settingsLayout.addWidget(self._modemSystemChoice)
         self._settingsLayout.addWidget(self._reloadPRIsButton)
         self._settingsLayout.addWidget(self._clearButton)
 
@@ -103,8 +73,7 @@ class MainWindow(QMainWindow):
         # заполнение главного окна
         self._uiJoin()
 
-        self._btnReloadClickedCallback()
-
+        self._systemChoosenCallback()
         
         self._createScadaServer()
         
@@ -133,57 +102,56 @@ class MainWindow(QMainWindow):
         self._wp[wp_num]._remeberScadaData(data)
         self._wp[wp_num]._btnFlashClickedCallback()
 
-    def _btnReloadClickedCallback(self):   
-        if not self._reloadButton.isFlat():
-            self._reloadButton.setFlat(True)
+    def _systemChoosenCallback(self):  
+        with open(r'/home/pi/apt-repo/dists/stable/main/binary-all/Packages', 'r') as file:
+            for content in file.readlines():
+                if 'Version' in content:
+                    self._simprgVersionWidget.setText(f"Flasher Version: {content[8:]}")
+                    break
+        
+        if self.firstChoice:
+            self.firstChoice = False
 
-            with open(r'/home/pi/apt-repo/dists/stable/main/binary-all/Packages', 'r') as file:
-                for content in file.readlines():
-                    if 'Version' in content:
-                        self._simprgVersionWidget.setText(f"Flasher Version: {content[8:]}")
-                        break
-            
-            self._modemSystemWidget.clear()
-            for file in os.listdir(r'/home/pi/apt-repo/system/'):
-                self._modemSystemWidget.addItem(file)
+            # dirs = os.listdir(r'/home/pi/apt-repo/system/')
 
-            self._updateModemSystem(self._modemSystemWidget.currentText())
-            
-            QTimer.singleShot(100, self._btnReloadClickedCallbackTimeout) 
+            homedir = r'/home/pi/apt-repo/system/'
+            res_paths = []
+            for paths, dirs, files in os.walk(homedir):
+                res_paths.append(paths.replace(homedir, ''))
 
-    
-    def _btnReloadClickedCallbackTimeout(self):   
-        self._reloadButton.setFlat(False)
+            with open('settings/FW_version_choice') as file:
+                previos_choice = file.readline()
 
-    def _updateModemSystem(self, item):
+                if previos_choice in res_paths:
+                    self._modemSystemChoice.setPath(previos_choice)
+
+                elif len(res_paths) > 0:
+                    self._modemSystemChoice.setPath(res_paths[0])
+        
+        with open('settings/FW_version_choice', 'w') as file:
+            file.write(self._modemSystemChoice.getPath())
+
         for wp_num in range(0, self.chipQty):
-            self._wp[wp_num].remeberModemSystem(item)
+            self._wp[wp_num].remeberModemSystem(self._modemSystemChoice.getPath())
+
 
     def _btnReloadRPIsClickedCallback(self):
         if not self._reloadPRIsButton.isFlat():
             self._reloadPRIsButton.setFlat(True)
 
             for wp_num in range(0, self.chipQty):
-                self._wp[wp_num].cancel_task()
+                self._wp[wp_num].rebootRPI()    
 
-            self.reboot = RebootRPI(self.chipQty)
-            self.reboot.finished.connect(self._btnReloadRPIsClickedCallbackThread)
-            self.reboot.start()        
-
-    def _btnReloadRPIsClickedCallbackThread(self):
         QTimer.singleShot(5000, self._btnReloadRPIsClickedCallbackTimeout) 
 
     def _btnReloadRPIsClickedCallbackTimeout(self):
-        for wp_num in range(0, self.chipQty):
-            self._wp[wp_num].clear_screen()
-
         self._reloadPRIsButton.setFlat(False)
 
     def _btnClearClickedCallback(self):
         if not self._clearButton.isFlat():
             self._clearButton.setFlat(True)
             for wp_num in range(0, self.chipQty):
-                self._wp[wp_num].clear_screen()
+                self._wp[wp_num]._clear_screen()
 
             QTimer.singleShot(100, self._btnClearClickedCallbackTimeout) 
 

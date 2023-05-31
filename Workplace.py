@@ -9,13 +9,14 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QColor
 from PyQt5.QtCore import (
     Qt,
+    QTimer
 )
 from WebSocketClient import *
 from ProgrammerClient import ScadaClient
 from ScadaDataTypes import ScadaData
 import logging
 import json
-
+import subprocess
 
 logs_path = "/home/pi/GatewayLogs"
 logger = logging.getLogger(__name__)
@@ -102,27 +103,41 @@ class Workplace(QVBoxLayout):
         self._rpi_thread.start()
 
     def _getFactory(self) -> str:
-        result = 0
-        with open('factory_numbers') as json_file:
+        FlashNum = 0
+        KU_num = 0
+        with open('settings/factory_numbers') as json_file:
             data = json.load(json_file)
-            result = data[self._wpnumber][1]
+            FlashNum = data[f'sim7600prg{self._wpnumber+1}']['FlashNum']
+            KU_num = data[f'sim7600prg{self._wpnumber+1}']['KU_num']
         
-        result = self._dec_to_base(result)
-        if len(result) == 1:
-            result = "000" + result
-        elif len(result) == 2:
-            result = "00" + result
-        elif len(result) == 3:
-            result = "0" + result
-        elif len(result) == 4:
-            result = result
+        FlashNum = self._dec_to_base(FlashNum)
+        if len(FlashNum) == 1:
+            FlashNum = "000" + FlashNum
+        elif len(FlashNum) == 2:
+            FlashNum = "00" + FlashNum
+        elif len(FlashNum) == 3:
+            FlashNum = "0" + FlashNum
+        elif len(FlashNum) == 4:
+            FlashNum = FlashNum
         else:
             logger.error("Factory Num Error")
 
+        KU_num = self._dec_to_base(KU_num)
+        if len(KU_num) == 1:
+            KU_num = "000" + KU_num
+        elif len(KU_num) == 2:
+            KU_num = "00" + KU_num
+        elif len(KU_num) == 3:
+            KU_num = "0" + KU_num
+        elif len(KU_num) == 4:
+            KU_num = KU_num
+        else:
+            logger.error("KU Num Error")
+
         string = ''
-        with open('factory_base') as file:
+        with open('settings/factory_base') as file:
             lines = file.readlines()
-            string = lines[0][:-1] + '#' + lines[1][:-5] + result
+            string = lines[0][:-1] + '#' + lines[1][:-9] + KU_num + FlashNum
 
         return string
 
@@ -148,19 +163,16 @@ class Workplace(QVBoxLayout):
 
     def _updateFactory(self):
         data = []
-        with open('factory_numbers') as json_file:
+        with open('settings/factory_numbers') as json_file:
             data = json.load(json_file)
         
-        data[self._wpnumber][1] += 1
+        data[f'sim7600prg{self._wpnumber+1}']['FlashNum'] += 1
 
-        with open('factory_numbers', 'w') as outfile:
+        with open('settings/factory_numbers', 'w') as outfile:
             json.dump(data, outfile)
 
     def _change_rpi_worker_status(self):
         self._prg_in_proc = False
-        if self.canceled_flag:
-            self.canceled_flag = False
-            self.clear_screen()
         logger.info("Delete WS")
 
     def _ping_rpi(self):
@@ -207,6 +219,9 @@ class Workplace(QVBoxLayout):
             self._isReady.setText('Программатор готов')
             self._isReady.setStyleSheet('background-color: green')
             self._button.setFlat(False)
+            if self.canceled_flag:
+                self.canceled_flag = False
+                self._clear_screen()
 
             self._scada_client.UpdateInfo('Ready To Start')
             self._scada_send()
@@ -219,7 +234,7 @@ class Workplace(QVBoxLayout):
         item = QListWidgetItem(log_msg)
         if log_level == 'LogOk':
             item.setForeground(QColor('#7fb94f')) # green
-        if log_level == 'LogWarn':
+        elif log_level == 'LogWarn':
             item.setForeground(QColor('#f0B030')) # yellow
             self._scada_client.UpdateInfo(log_msg)
         elif log_level == 'LogErr':
@@ -235,22 +250,13 @@ class Workplace(QVBoxLayout):
         self._logfield.addItem(item)
         self._logfield.scrollToBottom()
 
-    def clear_screen(self):
+    def _clear_screen(self):
         if not self._prg_in_proc:
             logger.info(f"Clear screen {self._wpnumber}")
             self._logfield.clear()
             self._status.setText(' --- ')
             self._status.setStyleSheet('background-color: gray')
             self._ping_rpi()
-
-    def cancel_task(self):
-        if self._prg_in_proc:
-            logger.info(f"Cancel task {self._wpnumber}")
-            try:
-                self._rpi_thread.terminate()
-                self.canceled_flag = True
-            except:
-                logger.error("Error in Cancel Task")
 
     def _remeberScadaData(self, data: ScadaData):
         self._scada_client.SetIMEI(data.sim_data.IMEI)
@@ -298,6 +304,36 @@ class Workplace(QVBoxLayout):
     def remeberModemSystem(self, system: str):
         self._modemSystem = system
 
+    def rebootRPI(self):
+        if self._prg_in_proc:
+            logger.info(f"Cancel task {self._wpnumber}")
+            try:
+                self._rpi_thread.terminate()
+            except:
+                logger.error("Error in Cancel Task")
+        else:
+            self._clear_screen()
+        
+        self.canceled_flag = True
+
+        try:
+            self._proc = subprocess.Popen(
+                f'sudo sshpass -p raspberry ssh pi@sim7600prg{self._wpnumber+1}.local -o StrictHostKeyChecking=no sudo reboot',
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            QTimer.singleShot(4000, self._endRebootRPI) 
+        except Exception as ex:
+            self._show_new_log('LogErr', f'Exception: {ex}')
+
+    def _endRebootRPI(self):
+        try:
+            out, err = self._proc.communicate(timeout=0.1)
+            self._show_new_log('LogInfo', err.decode("utf-8") )
+            self._show_new_log('LogOk', 'Reboot in progress' )
+        except Exception as ex:
+            self._show_new_log('LogErr', f'Exception: {ex}')
 
 # if __name__ == '__main__':
 #     # for i in range(, 1000010):
