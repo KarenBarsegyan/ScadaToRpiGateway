@@ -308,7 +308,7 @@ class Workplace(QVBoxLayout):
         if self._prg_in_proc:
             logger.info(f"Cancel task {self._wpnumber}")
             try:
-                self._rpi_thread.terminate()
+                self._rpi_thread.quit()
             except:
                 logger.error("Error in Cancel Task")
         else:
