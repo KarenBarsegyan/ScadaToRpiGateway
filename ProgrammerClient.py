@@ -20,12 +20,13 @@ class ScadaClient(QThread):
 
     def __init__(self, KU: int, parent=None):
         QThread.__init__(self, parent)
-
+        self._KU = KU
+        logger.warning(f"Init client KU: {self._KU}")
         self._info = []
 
         data_dict = {
             "IMEI": "",
-            "KU": KU,
+            "KU": self._KU,
             "ProgrammingsCnt": 0,
             "SWVersion": "",
             "Result": False,
@@ -63,24 +64,26 @@ class ScadaClient(QThread):
 
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             result = False
-            for i in range(5):
+            for i in range(3):
                 try:
-                    sock.connect(('192.168.88.251', 8080))
+                    sock.connect(('192.168.88.229', 8080))
                     sock.send(self._data_to_send.GetDataInBytes())
                     data_to_recv = sock.recv(1024)
 
                     scada_data_recv = ScadaData()
                     scada_data_recv.SetDataFromBytes(data_to_recv)
 
+                    logger.warning(f"Finished Emit True {self._data_to_send.sim_data.KU}")
                     self.finished.emit(True)
                     result = True
                     break
                 except Exception as ex:
-                    logger.warning(ex)
+                    logger.info(ex)
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
 
             if not result:
+                logger.warning(f"Finished Emit False {self._data_to_send.sim_data.KU}")
                 self.finished.emit(False)
 
     def run(self) -> None:
