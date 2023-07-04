@@ -21,7 +21,7 @@ class ScadaClient(QThread):
     def __init__(self, KU: int, parent=None):
         QThread.__init__(self, parent)
         self._KU = KU
-        logger.warning(f"Init client KU: {self._KU}")
+        logger.info(f"Init client KU: {self._KU}")
         self._info = []
 
         data_dict = {
@@ -66,7 +66,7 @@ class ScadaClient(QThread):
             result = False
             for i in range(3):
                 try:
-                    sock.connect(('192.168.88.229', 8080))
+                    sock.connect(('192.168.88.231', 8080))
                     sock.send(self._data_to_send.GetDataInBytes())
                     data_to_recv = sock.recv(1024)
 

@@ -37,6 +37,7 @@ class Workplace(QVBoxLayout):
         self._IMEI = ''
         self._PrgCnt = ''
         self._modemSystem = ''
+        self._modemType = ''
         self._pingingInProc = False
         self._prg_in_proc = False
         self.canceled_flag = False
@@ -81,60 +82,68 @@ class Workplace(QVBoxLayout):
             self.addWidget(self._button)
 
     def _create_websocket(self):
-        self._prg_in_proc = True
-        self._status.setText('В процессе    ')
-        self._number_of_points = 0
-        self._status.setStyleSheet('background-color: gray')
+        factoryNum = self._getFactory() 
+        if factoryNum == '':
+            self._button.setFlat(False)
+        else:
+            self._prg_in_proc = True
+            self._status.setText('В процессе    ')
+            self._number_of_points = 0
+            self._status.setStyleSheet('background-color: gray')
 
-        factoryNum = self._getFactory()       
-        self._rpi_thread = QThread()
-        self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 
-                                           self._modemSystem + '#' + factoryNum)
-        self._rpi_worker.moveToThread(self._rpi_thread)
+            self._rpi_thread = QThread()
+            self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 
+                                    self._modemSystem + '#' + factoryNum + '#' + self._modemType)
+                                    
+            self._rpi_worker.moveToThread(self._rpi_thread)
 
-        self._rpi_thread.started.connect(self._rpi_worker.run)
-        self._rpi_worker.finished.connect(self._rpi_thread.quit)
-        self._rpi_worker.finished.connect(self._rpi_worker.deleteLater)
-        self._rpi_thread.finished.connect(self._rpi_thread.deleteLater)
+            self._rpi_thread.started.connect(self._rpi_worker.run)
+            self._rpi_worker.finished.connect(self._rpi_thread.quit)
+            self._rpi_worker.finished.connect(self._rpi_worker.deleteLater)
+            self._rpi_thread.finished.connect(self._rpi_thread.deleteLater)
 
-        self._rpi_worker.finished.connect(self._change_rpi_worker_status)
-        self._rpi_worker.progress.connect(self._show_new_log)
-        self._rpi_worker.status.connect(self._change_status)
-        self._rpi_worker.ping.connect(self._ping_callback)
+            self._rpi_worker.finished.connect(self._change_rpi_worker_status)
+            self._rpi_worker.progress.connect(self._show_new_log)
+            self._rpi_worker.status.connect(self._change_status)
+            self._rpi_worker.ping.connect(self._ping_callback)
 
-        self._rpi_thread.start()
+            self._rpi_thread.start()
 
     def _getFactory(self) -> str:
         FlashNum = 0
         KU_num = 0
+        try:
+            with open('settings/factory_numbers') as json_file:
+                data = json.load(json_file)
+                FlashNum = data[f'sim7600prg{self._wpnumber+1}']['FlashNum']
+                KU_num = data[f'sim7600prg{self._wpnumber+1}']['KU_num']
+            
+            FlashNum = self._dec_to_base(FlashNum)
+            if len(FlashNum) == 1:
+                FlashNum = "00" + FlashNum
+            elif len(FlashNum) == 2:
+                FlashNum = "0" + FlashNum
+            elif len(FlashNum) == 3:
+                FlashNum = FlashNum
+            else:
+                logger.error("Factory Num Error")
 
-        with open('settings/factory_numbers') as json_file:
-            data = json.load(json_file)
-            FlashNum = data[f'sim7600prg{self._wpnumber+1}']['FlashNum']
-            KU_num = data[f'sim7600prg{self._wpnumber+1}']['KU_num']
-        
-        FlashNum = self._dec_to_base(FlashNum)
-        if len(FlashNum) == 1:
-            FlashNum = "00" + FlashNum
-        elif len(FlashNum) == 2:
-            FlashNum = "0" + FlashNum
-        elif len(FlashNum) == 3:
-            FlashNum = FlashNum
-        else:
-            logger.error("Factory Num Error")
+            KU_num = self._dec_to_base(KU_num)
 
-        KU_num = self._dec_to_base(KU_num)
+            if len(KU_num) != 1:
+                KU_num = 0
+                logger.error("KU Num Error")
 
-        if len(KU_num) != 1:
-            KU_num = 0
-            logger.error("KU Num Error")
+            string = ''
+            with open(f'/home/pi/apt-repo/system/{self._modemSystem}/../factory.cfg') as file:
+                lines = file.readlines()
+                string = lines[0][:-1] + '#' + lines[1][:-5] + KU_num + FlashNum
 
-        string = ''
-        with open(f'/home/pi/apt-repo/system/{self._modemSystem}/../factory.cfg') as file:
-            lines = file.readlines()
-            string = lines[0][:-1] + '#' + lines[1][:-5] + KU_num + FlashNum
-
-        return string
+            return string
+        except Exception as ex:
+            logger.error(f"_getFactory error: {ex}")
+            self._show_new_log('LogErr', f'Get Programming Number Error: {ex}')
+            return ''
 
     def _dec_to_base(self, num):
         base_num = ""
@@ -157,14 +166,18 @@ class Workplace(QVBoxLayout):
         return base_num
 
     def _updateFactory(self):
-        data = []
-        with open('settings/factory_numbers') as json_file:
-            data = json.load(json_file)
-        
-        data[f'sim7600prg{self._wpnumber+1}']['FlashNum'] += 1
+        try:
+            data = []
+            with open('settings/factory_numbers') as json_file:
+                data = json.load(json_file)
+            
+            data[f'sim7600prg{self._wpnumber+1}']['FlashNum'] += 1
 
-        with open('settings/factory_numbers', 'w') as outfile:
-            json.dump(data, outfile)
+            with open('settings/factory_numbers', 'w') as outfile:
+                json.dump(data, outfile)
+        except Exception as ex:
+            logger.error(f"_updateFactory error: ", ex)
+            self._show_new_log('LogErr', f'Update Programming Number Error: {ex}')
 
     def _change_rpi_worker_status(self):
         self._prg_in_proc = False
@@ -312,6 +325,9 @@ class Workplace(QVBoxLayout):
 
     def remeberModemSystem(self, system: str):
         self._modemSystem = system
+
+    def remeberModemType(self, type: str):
+        self._modemType = type
 
     def rebootRPI(self):
         if self._prg_in_proc:

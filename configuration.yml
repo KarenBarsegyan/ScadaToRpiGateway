@@ -23,4 +23,4 @@ workplace_width_amount: 5
 #! -------------------------------------------------- !#
 
 # you can choose 2 options: 'scada' or 'human'
-use_case: 'scada'
+use_case: 'human'

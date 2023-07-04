@@ -8,7 +8,8 @@ from PyQt5.QtWidgets import (
     QHBoxLayout,
     QLineEdit,
     QPushButton,
-    QComboBox
+    QComboBox,
+    QLabel
 )
 from PyQt5.QtCore import (
     Qt,
@@ -30,6 +31,7 @@ class MainWindow(QMainWindow):
         self.wpWidth = self._config['workplace_width_amount']
         self._usecase = self._config['use_case']
         self.firstChoice = True
+        self._firstTimeType = True
 
         self.setWindowTitle('SIMCOM7600 Programmer')
         self._mainWidget = QWidget()
@@ -47,6 +49,18 @@ class MainWindow(QMainWindow):
         self._modemSystemChoice.setDefaultDir(r'/home/pi/apt-repo/system/')
         self._modemSystemChoice.setCallBack(self._systemChoosenCallback)
 
+        modemTypeLabel = QLabel("Modem Type: ")
+
+        self._modemTypeChoice = QComboBox()
+        self._modemTypeChoice.addItem("Usual")
+        self._modemTypeChoice.addItem("Retrofit")
+        self._modemTypeChoice.setMinimumWidth(100)
+        self._modemTypeChoice.currentIndexChanged.connect(self._modemTypeChoosenCallback)
+
+        spaceLabel = QLabel("")
+        spaceLabel.setMinimumWidth(50)
+        spaceLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         self._reloadPRIsButton = QPushButton("Reboot Raspberries")
         self._reloadPRIsButton.clicked.connect(self._btnReloadRPIsClickedCallback)
 
@@ -55,6 +69,10 @@ class MainWindow(QMainWindow):
 
         self._settingsLayout.addWidget(self._simprgVersionWidget)
         self._settingsLayout.addWidget(self._modemSystemChoice)
+        self._settingsLayout.addWidget(spaceLabel)
+        self._settingsLayout.addWidget(modemTypeLabel)
+        self._settingsLayout.addWidget(self._modemTypeChoice)
+        self._settingsLayout.addWidget(spaceLabel)
         self._settingsLayout.addWidget(self._reloadPRIsButton)
         self._settingsLayout.addWidget(self._clearButton)
 
@@ -74,6 +92,7 @@ class MainWindow(QMainWindow):
         self._uiJoin()
 
         self._systemChoosenCallback()
+        self._modemTypeChoosenCallback()
         
         self._createScadaServer()
         
@@ -157,4 +176,22 @@ class MainWindow(QMainWindow):
 
     def _btnClearClickedCallbackTimeout(self):
         self._clearButton.setFlat(False)
+
+    def _modemTypeChoosenCallback(self):
+        self._modemType = self._modemTypeChoice.currentText()
+
+        if self._firstTimeType:
+            self._firstTimeType = False
+            with open('settings/modem_type_choice') as file:
+                modemType = file.readline()
+
+                for i in range(self._modemTypeChoice.count()):
+                    if modemType == self._modemTypeChoice.itemText(i):
+                        self._modemTypeChoice.setCurrentIndex(i)
+
+        with open('settings/modem_type_choice', 'w') as file:
+            file.write(self._modemTypeChoice.currentText())
+
+        for wp_num in range(0, self.chipQty):
+            self._wp[wp_num].remeberModemType(self._modemType)
 
