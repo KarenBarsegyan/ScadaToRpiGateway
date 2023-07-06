@@ -44,6 +44,7 @@ class Workplace(QVBoxLayout):
         self._firstScadaSending = True
         self._currIMEI = 0
         self._currPrgCnt = 0
+        self._performChecks = True
 
         self._uiAddLogField()
         self._uiAddStatusField()
@@ -91,9 +92,13 @@ class Workplace(QVBoxLayout):
             self._number_of_points = 0
             self._status.setStyleSheet('background-color: gray')
 
+            check = '0'
+            if self._performChecks:
+                check = '1'
+
             self._rpi_thread = QThread()
             self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 
-                                    self._modemSystem + '#' + factoryNum + '#' + self._modemType)
+                                    self._modemSystem + '#' + factoryNum + '#' + self._modemType+ '#' + check)
                                     
             self._rpi_worker.moveToThread(self._rpi_thread)
 
@@ -328,6 +333,9 @@ class Workplace(QVBoxLayout):
 
     def remeberModemType(self, type: str):
         self._modemType = type
+
+    def remeberPerformCheck(self, perform: bool):
+        self._performChecks = perform
 
     def rebootRPI(self):
         if self._prg_in_proc:

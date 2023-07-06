@@ -9,7 +9,8 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QPushButton,
     QComboBox,
-    QLabel
+    QLabel,
+    QCheckBox
 )
 from PyQt5.QtCore import (
     Qt,
@@ -32,6 +33,7 @@ class MainWindow(QMainWindow):
         self._usecase = self._config['use_case']
         self.firstChoice = True
         self._firstTimeType = True
+        self._firstTimePerformCheck = True
 
         self.setWindowTitle('SIMCOM7600 Programmer')
         self._mainWidget = QWidget()
@@ -61,6 +63,10 @@ class MainWindow(QMainWindow):
         spaceLabel.setMinimumWidth(50)
         spaceLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
+        self._performTests = QCheckBox()
+        self._performTests.setText(f"Perform Tests")
+        self._performTests.stateChanged.connect(self._performTestsChanged)
+
         self._reloadPRIsButton = QPushButton("Reboot Raspberries")
         self._reloadPRIsButton.clicked.connect(self._btnReloadRPIsClickedCallback)
 
@@ -72,6 +78,8 @@ class MainWindow(QMainWindow):
         self._settingsLayout.addWidget(spaceLabel)
         self._settingsLayout.addWidget(modemTypeLabel)
         self._settingsLayout.addWidget(self._modemTypeChoice)
+        self._settingsLayout.addWidget(spaceLabel)
+        self._settingsLayout.addWidget(self._performTests)
         self._settingsLayout.addWidget(spaceLabel)
         self._settingsLayout.addWidget(self._reloadPRIsButton)
         self._settingsLayout.addWidget(self._clearButton)
@@ -93,6 +101,7 @@ class MainWindow(QMainWindow):
 
         self._systemChoosenCallback()
         self._modemTypeChoosenCallback()
+        self._performTestsChanged()
         
         self._createScadaServer()
         
@@ -195,3 +204,20 @@ class MainWindow(QMainWindow):
         for wp_num in range(0, self.chipQty):
             self._wp[wp_num].remeberModemType(self._modemType)
 
+    def _performTestsChanged(self):
+        if self._firstTimePerformCheck:
+            self._firstTimePerformCheck = False
+            with open('settings/perform_check') as file:
+                if file.readline() == '1':
+                    self._performTests.setChecked(True)  
+                else:
+                    self._performTests.setChecked(False)  
+
+        with open('settings/perform_check', 'w') as file:
+            if self._performTests.isChecked():
+                file.write('1')
+            else:
+                file.write('0')
+
+        for wp_num in range(0, self.chipQty):
+            self._wp[wp_num].remeberPerformCheck(self._performTests.isChecked())
