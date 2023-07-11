@@ -22,6 +22,7 @@ from ProgrammerServer import ScadaServer
 from ScadaDataTypes import ScadaData
 import os
 from FileBrowser import FileBrowser
+import json
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -54,7 +55,7 @@ class MainWindow(QMainWindow):
         modemTypeLabel = QLabel("Modem Type: ")
 
         self._modemTypeChoice = QComboBox()
-        self._modemTypeChoice.addItem("Usual")
+        self._modemTypeChoice.addItem("Simple")
         self._modemTypeChoice.addItem("Retrofit")
         self._modemTypeChoice.setMinimumWidth(100)
         self._modemTypeChoice.currentIndexChanged.connect(self._modemTypeChoosenCallback)
@@ -147,7 +148,7 @@ class MainWindow(QMainWindow):
             for paths, dirs, files in os.walk(homedir):
                 res_paths.append(paths.replace(homedir, ''))
 
-            with open('settings/FW_version_choice') as file:
+            with open(r'/home/pi/GateWaySettings/FW_version_choice') as file:
                 previos_choice = file.readline()
 
                 if previos_choice in res_paths:
@@ -156,8 +157,17 @@ class MainWindow(QMainWindow):
                 elif len(res_paths) > 0:
                     self._modemSystemChoice.setPath(res_paths[0])
         
-        with open('settings/FW_version_choice', 'w') as file:
+        with open(r'/home/pi/GateWaySettings/FW_version_choice', 'w') as file:
             file.write(self._modemSystemChoice.getPath())
+
+        if os.path.isfile(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../factory.cfg'):
+            if not os.path.isfile(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../prg_cnt'):
+                data = {}
+                for wp_num in range(0, self.chipQty):
+                    data[f'sim7600prg{wp_num+1}'] = 0
+
+                with open(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../prg_cnt', 'w') as outfile:
+                    json.dump(data, outfile)
 
         for wp_num in range(0, self.chipQty):
             self._wp[wp_num].remeberModemSystem(self._modemSystemChoice.getPath())
@@ -191,14 +201,14 @@ class MainWindow(QMainWindow):
 
         if self._firstTimeType:
             self._firstTimeType = False
-            with open('settings/modem_type_choice') as file:
+            with open(r'/home/pi/GateWaySettings/modem_type_choice') as file:
                 modemType = file.readline()
 
                 for i in range(self._modemTypeChoice.count()):
                     if modemType == self._modemTypeChoice.itemText(i):
                         self._modemTypeChoice.setCurrentIndex(i)
 
-        with open('settings/modem_type_choice', 'w') as file:
+        with open(r'/home/pi/GateWaySettings/modem_type_choice', 'w') as file:
             file.write(self._modemTypeChoice.currentText())
 
         for wp_num in range(0, self.chipQty):
@@ -207,13 +217,13 @@ class MainWindow(QMainWindow):
     def _performTestsChanged(self):
         if self._firstTimePerformCheck:
             self._firstTimePerformCheck = False
-            with open('settings/perform_check') as file:
+            with open(r'/home/pi/GateWaySettings/perform_check') as file:
                 if file.readline() == '1':
                     self._performTests.setChecked(True)  
                 else:
                     self._performTests.setChecked(False)  
 
-        with open('settings/perform_check', 'w') as file:
+        with open(r'/home/pi/GateWaySettings/perform_check', 'w') as file:
             if self._performTests.isChecked():
                 file.write('1')
             else:

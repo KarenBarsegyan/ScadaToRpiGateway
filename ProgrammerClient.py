@@ -37,6 +37,7 @@ class ScadaClient(QThread):
         }
         self._data_to_send = ScadaData(data_dict)
 
+    def SetStartTime(self):
         self._data_to_send.SetStartTime()
 
     def SetFWVersion(self, SW):

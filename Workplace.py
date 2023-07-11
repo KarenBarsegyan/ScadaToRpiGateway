@@ -83,7 +83,11 @@ class Workplace(QVBoxLayout):
             self.addWidget(self._button)
 
     def _create_websocket(self):
-        factoryNum = self._getFactory() 
+        if self._modemType != 'Retrofit':
+            factoryNum = self._getFactory() 
+        else:
+            factoryNum = 'MODEL_ID=NO#SERIAL_NUMBER=NO'
+
         if factoryNum == '':
             self._button.setFlat(False)
         else:
@@ -118,10 +122,13 @@ class Workplace(QVBoxLayout):
         FlashNum = 0
         KU_num = 0
         try:
-            with open('settings/factory_numbers') as json_file:
+            with open(r'/home/pi/GateWaySettings/KU_numbers') as json_file:
                 data = json.load(json_file)
-                FlashNum = data[f'sim7600prg{self._wpnumber+1}']['FlashNum']
-                KU_num = data[f'sim7600prg{self._wpnumber+1}']['KU_num']
+                KU_num = data[f'sim7600prg{self._wpnumber+1}']
+
+            with open(f'/home/pi/apt-repo/system/{self._modemSystem}/../prg_cnt') as json_file:
+                data = json.load(json_file)
+                FlashNum = data[f'sim7600prg{self._wpnumber+1}']
             
             FlashNum = self._dec_to_base(FlashNum)
             if len(FlashNum) == 1:
@@ -173,13 +180,14 @@ class Workplace(QVBoxLayout):
     def _updateFactory(self):
         try:
             data = []
-            with open('settings/factory_numbers') as json_file:
+            with open(f'/home/pi/apt-repo/system/{self._modemSystem}/../prg_cnt') as json_file:
                 data = json.load(json_file)
             
-            data[f'sim7600prg{self._wpnumber+1}']['FlashNum'] += 1
+            data[f'sim7600prg{self._wpnumber+1}'] += 1
 
-            with open('settings/factory_numbers', 'w') as outfile:
+            with open(f'/home/pi/apt-repo/system/{self._modemSystem}/../prg_cnt', 'w') as outfile:
                 json.dump(data, outfile)
+
         except Exception as ex:
             logger.error(f"_updateFactory error: ", ex)
             self._show_new_log('LogErr', f'Update Programming Number Error: {ex}')
@@ -217,6 +225,12 @@ class Workplace(QVBoxLayout):
         if not self._button.isFlat():
             self._button.setFlat(True)
             self._logfield.clear()
+
+            self._scada_client_work = ScadaClient(self._wpnumber+1)
+            self._scada_client_work.finished.connect(self._scada_sended_callback)
+            self._scada_client_work.SetIMEI(self._currIMEI)
+            self._scada_client_work.SetPrgCnt(self._currPrgCnt)
+
             self._create_websocket()
 
     def _scada_sended_callback(self, res: bool):
@@ -239,9 +253,13 @@ class Workplace(QVBoxLayout):
 
             if self._firstScadaSending:
                 self._firstScadaSending = False
-                self._scada_client_ping.UpdateInfo('Ready To Start')
-                if self.usecase == 'scada':
-                    self._scada_client_ping.start()
+                try:
+                    self._scada_client_ping.UpdateInfo('Ready To Start')
+                    if self.usecase == 'scada':
+                        self._scada_client_ping.start()
+
+                except Exception as ex:
+                        logger.error(f"Ping Status Callback error: {ex}")
         else:
             self._isReady.setText('Ожидание программатора')
             self._isReady.setStyleSheet('background-color: gray')
@@ -255,22 +273,27 @@ class Workplace(QVBoxLayout):
             item.setForeground(QColor('#f0B030')) # yellow
             try:
                 self._scada_client_work.UpdateInfo(log_msg)
-            except: pass
+            except Exception as ex:
+                logger.error(f"Show log LogWarn error: {ex}")
+
         elif log_level == 'LogErr':
             item.setForeground(QColor('#f00000')) # red
             try:    
                 self._scada_client_work.UpdateInfo(log_msg)
-            except: pass
+            except Exception as ex:
+                logger.warning(f"Show log LogErr error: {ex}")
+
         if 'Start flashing' in log_msg:
-            self._scada_client_work = ScadaClient(self._wpnumber+1)
-            self._scada_client_work.finished.connect(self._scada_sended_callback)
-            self._scada_client_work.SetIMEI(self._currIMEI)
-            self._scada_client_work.SetPrgCnt(self._currPrgCnt)
+            try:
+                self._scada_client_work.SetStartTime()
+            except Exception as ex:
+                logger.warning(f"Show log start flashing error: {ex}")
 
         if 'FW version:' in log_msg:
             try:
                 self._scada_client_work.SetFWVersion(log_msg[12:])
-            except: pass
+            except Exception as ex:
+                logger.warning(f"Show log FW ver error: {ex}")
             
         self._logfield.addItem(item)
         self._logfield.scrollToBottom()
@@ -291,18 +314,26 @@ class Workplace(QVBoxLayout):
     def _change_status(self, work_result:bool):    
         logger.info(f"Change Status: {self._wpnumber}")
         if work_result:
-            self._scada_client_work.SetCommand('FinishedOK')
-            self._scada_client_work.SetResult(True)
-            self._scada_client_work.start()
+            try:
+                self._scada_client_work.SetCommand('FinishedOK')
+                self._scada_client_work.SetResult(True)
+                if self.usecase == 'scada':
+                    self._scada_client_work.start()
+            except Exception as ex:
+                logger.warning(f"Change_status error: {ex}")
 
             self._updateFactory()
 
             self._status.setText('Успешно')
             self._status.setStyleSheet('background-color: green')
         else:
-            self._scada_client_work.SetCommand('FinishedNOK')
-            self._scada_client_work.SetResult(False)
-            self._scada_client_work.start()
+            try:
+                self._scada_client_work.SetCommand('FinishedNOK')
+                self._scada_client_work.SetResult(False)
+                if self.usecase == 'scada':
+                    self._scada_client_work.start()
+            except Exception as ex:
+                logger.warning(f"Change_status error: {ex}")
 
             self._status.setText('Ошибка')
             self._status.setStyleSheet('background-color: red')
@@ -331,8 +362,8 @@ class Workplace(QVBoxLayout):
     def remeberModemSystem(self, system: str):
         self._modemSystem = system
 
-    def remeberModemType(self, type: str):
-        self._modemType = type
+    def remeberModemType(self, modemtype: str):
+        self._modemType = modemtype
 
     def remeberPerformCheck(self, perform: bool):
         self._performChecks = perform
