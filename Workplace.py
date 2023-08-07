@@ -45,6 +45,7 @@ class Workplace(QVBoxLayout):
         self._currIMEI = 0
         self._currPrgCnt = 0
         self._performChecks = True
+        self._needUpdateFactory = False
 
         self._uiAddLogField()
         self._uiAddStatusField()
@@ -85,7 +86,9 @@ class Workplace(QVBoxLayout):
     def _create_websocket(self):
         if self._modemType != 'Retrofit':
             factoryNum = self._getFactory() 
+            self._needUpdateFactory = True
         else:
+            self._needUpdateFactory = False
             factoryNum = 'MODEL_ID=NO#SERIAL_NUMBER=NO'
 
         if factoryNum == '':
@@ -247,7 +250,7 @@ class Workplace(QVBoxLayout):
             self._isReady.setStyleSheet('background-color: green')
             self._button.setFlat(False)
             if self.canceled_flag:
-                logger.warning(f'cancelled flad {self._wpnumber}')
+                logger.warning(f'Cancelled flag {self._wpnumber}')
                 self.canceled_flag = False
                 self._clear_screen()
 
@@ -322,7 +325,8 @@ class Workplace(QVBoxLayout):
             except Exception as ex:
                 logger.warning(f"Change_status error: {ex}")
 
-            self._updateFactory()
+            if self._needUpdateFactory:
+                self._updateFactory()
 
             self._status.setText('Успешно')
             self._status.setStyleSheet('background-color: green')
