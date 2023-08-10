@@ -84,8 +84,8 @@ class WebSocketClient(QThread):
             logger.info("Cancelled error in WebSocketClient _talk")
             self.progress.emit('LogErr', 'RPI connection Error')
             self.status.emit(False)   
-        except:
-            logger.info("Another error in WebSocketClient _talk")
+        except Exception as ex:
+            logger.warning(f"Another error in WebSocketClient _talk: {ex}")
             self.progress.emit('LogErr', 'RPI connection Error')
             self.status.emit(False)             
 
@@ -107,15 +107,15 @@ class WebSocketClient(QThread):
                 await asyncio.sleep(1)
         except asyncio.CancelledError:
             logger.info("Cancelled error in _ping")
-        except:
-            logger.info("Another error in _ping")
+        except Exception as ex:
+            logger.error(f"Another error in _ping: {ex}")
 
     def run(self) -> None:
         asyncio.run(self._talk())    
         try:
             self.finished.emit()  
         except Exception as ex:
-            logger.info(f"Ex: {ex}") 
+            logger.error(f"Ex: {ex}") 
 
 class WebSocketClientChecker(QThread):
     finished = pyqtSignal()
@@ -180,12 +180,12 @@ class WebSocketClientChecker(QThread):
 
         except asyncio.CancelledError:
             logger.info("Cancelled error in WebSocketClientChecker _talk")
-        except:
-            logger.info("Another error in WebSocketClientChecker _talk")
+        except Exception as ex:
+            logger.error(f"Another error in WebSocketClientChecker _talk: {ex}")
     
     def run(self) -> None:
         asyncio.run(self._talk()) 
         try:
             self.finished.emit()  
         except Exception as ex:
-            logger.info(f"Ex: {ex}") 
+            logger.error(f"Ex: {ex}") 

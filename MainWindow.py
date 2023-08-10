@@ -23,11 +23,21 @@ from ScadaDataTypes import ScadaData
 import os
 from FileBrowser import FileBrowser
 import json
+import logging
+
+logs_path = "/home/pi/GatewayLogs"
+logger = logging.getLogger(__name__)
+f_handler = logging.FileHandler(f'{logs_path}/{__name__}.log')
+f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+f_handler.setFormatter(f_format)
+logger.addHandler(f_handler)
+logger.setLevel(logging.WARNING)
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-
+        
         self._config = yaml.load(open("/home/pi/ScadaToRpiGateway/configuration.yml"), yaml.SafeLoader)
         self.chipQty = self._config['chip_number']
         self.wpWidth = self._config['workplace_width_amount']
@@ -127,107 +137,129 @@ class MainWindow(QMainWindow):
             self._scada_server_thread.start()
 
     def _choose_wp(self, data: ScadaData):
-        wp_num = int(data.sim_data.KU)-1
-        self._wp[wp_num]._remeberScadaData(data)
-        self._wp[wp_num]._btnFlashClickedCallback()
+        try:
+            wp_num = int(data.sim_data.KU)-1
+            self._wp[wp_num]._remeberScadaData(data)
+            self._wp[wp_num]._btnFlashClickedCallback()
+        except Exception as ex:
+            logger.error(f"_choose_wp error: {ex}")
+
 
     def _systemChoosenCallback(self):  
-        with open(r'/home/pi/apt-repo/dists/stable/main/binary-all/Packages', 'r') as file:
-            for content in file.readlines():
-                if 'Version' in content:
-                    self._simprgVersionWidget.setText(f"Flasher Version: {content[8:]}")
-                    break
+        try:
+            with open(r'/home/pi/apt-repo/dists/stable/main/binary-all/Packages', 'r') as file:
+                for content in file.readlines():
+                    if 'Version' in content:
+                        self._simprgVersionWidget.setText(f"Flasher Version: {content[8:]}")
+                        break
+            
+            if self.firstChoice:
+                self.firstChoice = False
+
+                homedir = r'/home/pi/apt-repo/system/'
+                res_paths = []
+                for paths, dirs, files in os.walk(homedir):
+                    res_paths.append(paths.replace(homedir, ''))
+
+                with open(r'/home/pi/GateWaySettings/FW_version_choice') as file:
+                    previos_choice = file.readline()
+
+                    if previos_choice in res_paths:
+                        self._modemSystemChoice.setPath(previos_choice)
+
+                    elif len(res_paths) > 0:
+                        self._modemSystemChoice.setPath(res_paths[0])
+            
+            with open(r'/home/pi/GateWaySettings/FW_version_choice', 'w') as file:
+                file.write(self._modemSystemChoice.getPath())
+
+            if os.path.isfile(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../factory.cfg'):
+                if not os.path.isfile(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../prg_cnt'):
+                    data = {}
+                    for wp_num in range(0, self.chipQty):
+                        data[f'sim7600prg{wp_num+1}'] = 0
+
+                    with open(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../prg_cnt', 'w') as outfile:
+                        json.dump(data, outfile)
+
+            for wp_num in range(0, self.chipQty):
+                self._wp[wp_num].remeberModemSystem(self._modemSystemChoice.getPath())
         
-        if self.firstChoice:
-            self.firstChoice = False
-
-            # dirs = os.listdir(r'/home/pi/apt-repo/system/')
-
-            homedir = r'/home/pi/apt-repo/system/'
-            res_paths = []
-            for paths, dirs, files in os.walk(homedir):
-                res_paths.append(paths.replace(homedir, ''))
-
-            with open(r'/home/pi/GateWaySettings/FW_version_choice') as file:
-                previos_choice = file.readline()
-
-                if previos_choice in res_paths:
-                    self._modemSystemChoice.setPath(previos_choice)
-
-                elif len(res_paths) > 0:
-                    self._modemSystemChoice.setPath(res_paths[0])
-        
-        with open(r'/home/pi/GateWaySettings/FW_version_choice', 'w') as file:
-            file.write(self._modemSystemChoice.getPath())
-
-        if os.path.isfile(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../factory.cfg'):
-            if not os.path.isfile(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../prg_cnt'):
-                data = {}
-                for wp_num in range(0, self.chipQty):
-                    data[f'sim7600prg{wp_num+1}'] = 0
-
-                with open(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../prg_cnt', 'w') as outfile:
-                    json.dump(data, outfile)
-
-        for wp_num in range(0, self.chipQty):
-            self._wp[wp_num].remeberModemSystem(self._modemSystemChoice.getPath())
+        except Exception as ex:
+            logger.error(f"_systemChoosenCallback error: {ex}")
 
 
     def _btnReloadRPIsClickedCallback(self):
-        if not self._reloadPRIsButton.isFlat():
-            self._reloadPRIsButton.setFlat(True)
+        try:
+            if not self._reloadPRIsButton.isFlat():
+                self._reloadPRIsButton.setFlat(True)
 
-            for wp_num in range(0, self.chipQty):
-                self._wp[wp_num].rebootRPI()    
+                for wp_num in range(0, self.chipQty):
+                    self._wp[wp_num].rebootRPI()    
 
-        QTimer.singleShot(5000, self._btnReloadRPIsClickedCallbackTimeout) 
+            QTimer.singleShot(5000, self._btnReloadRPIsClickedCallbackTimeout) 
+
+        except Exception as ex:
+            logger.error(f"_btnReloadRPIsClickedCallback error: {ex}")
 
     def _btnReloadRPIsClickedCallbackTimeout(self):
         self._reloadPRIsButton.setFlat(False)
 
     def _btnClearClickedCallback(self):
-        if not self._clearButton.isFlat():
-            self._clearButton.setFlat(True)
-            for wp_num in range(0, self.chipQty):
-                self._wp[wp_num]._clear_screen()
+        try:
+            if not self._clearButton.isFlat():
+                self._clearButton.setFlat(True)
+                for wp_num in range(0, self.chipQty):
+                    self._wp[wp_num]._clear_screen()
 
-            QTimer.singleShot(100, self._btnClearClickedCallbackTimeout) 
+                QTimer.singleShot(100, self._btnClearClickedCallbackTimeout) 
+        
+        except Exception as ex:
+            logger.error(f"_btnClearClickedCallback error: {ex}")
 
     def _btnClearClickedCallbackTimeout(self):
         self._clearButton.setFlat(False)
 
     def _modemTypeChoosenCallback(self):
-        self._modemType = self._modemTypeChoice.currentText()
+        try:
+            self._modemType = self._modemTypeChoice.currentText()
 
-        if self._firstTimeType:
-            self._firstTimeType = False
-            with open(r'/home/pi/GateWaySettings/modem_type_choice') as file:
-                modemType = file.readline()
+            if self._firstTimeType:
+                self._firstTimeType = False
+                with open(r'/home/pi/GateWaySettings/modem_type_choice') as file:
+                    modemType = file.readline()
 
-                for i in range(self._modemTypeChoice.count()):
-                    if modemType == self._modemTypeChoice.itemText(i):
-                        self._modemTypeChoice.setCurrentIndex(i)
+                    for i in range(self._modemTypeChoice.count()):
+                        if modemType == self._modemTypeChoice.itemText(i):
+                            self._modemTypeChoice.setCurrentIndex(i)
 
-        with open(r'/home/pi/GateWaySettings/modem_type_choice', 'w') as file:
-            file.write(self._modemTypeChoice.currentText())
+            with open(r'/home/pi/GateWaySettings/modem_type_choice', 'w') as file:
+                file.write(self._modemTypeChoice.currentText())
 
-        for wp_num in range(0, self.chipQty):
-            self._wp[wp_num].remeberModemType(self._modemType)
+            for wp_num in range(0, self.chipQty):
+                self._wp[wp_num].remeberModemType(self._modemType)
+
+        except Exception as ex:
+            logger.error(f"_modemTypeChoosenCallback error: {ex}")
 
     def _performTestsChanged(self):
-        if self._firstTimePerformCheck:
-            self._firstTimePerformCheck = False
-            with open(r'/home/pi/GateWaySettings/perform_check') as file:
-                if file.readline() == '1':
-                    self._performTests.setChecked(True)  
+        try:
+            if self._firstTimePerformCheck:
+                self._firstTimePerformCheck = False
+                with open(r'/home/pi/GateWaySettings/perform_check') as file:
+                    if file.readline() == '1':
+                        self._performTests.setChecked(True)  
+                    else:
+                        self._performTests.setChecked(False)  
+
+            with open(r'/home/pi/GateWaySettings/perform_check', 'w') as file:
+                if self._performTests.isChecked():
+                    file.write('1')
                 else:
-                    self._performTests.setChecked(False)  
+                    file.write('0')
 
-        with open(r'/home/pi/GateWaySettings/perform_check', 'w') as file:
-            if self._performTests.isChecked():
-                file.write('1')
-            else:
-                file.write('0')
+            for wp_num in range(0, self.chipQty):
+                self._wp[wp_num].remeberPerformCheck(self._performTests.isChecked())
 
-        for wp_num in range(0, self.chipQty):
-            self._wp[wp_num].remeberPerformCheck(self._performTests.isChecked())
+        except Exception as ex:
+            logger.error(f"_performTestsChanged error: {ex}")

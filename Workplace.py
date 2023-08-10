@@ -39,7 +39,7 @@ class Workplace(QVBoxLayout):
         self._modemSystem = ''
         self._modemType = ''
         self._pingingInProc = False
-        self._prg_in_proc = False
+        self._prgInProc = False
         self.canceled_flag = False
         self._firstScadaSending = True
         self._currIMEI = 0
@@ -84,42 +84,45 @@ class Workplace(QVBoxLayout):
             self.addWidget(self._button)
 
     def _create_websocket(self):
-        if self._modemType != 'Retrofit':
-            factoryNum = self._getFactory() 
-            self._needUpdateFactory = True
-        else:
-            self._needUpdateFactory = False
-            factoryNum = 'MODEL_ID=NO#SERIAL_NUMBER=NO'
+        try:
+            if self._modemType != 'Retrofit':
+                factoryNum = self._getFactory() 
+                self._needUpdateFactory = True
+            else:
+                self._needUpdateFactory = False
+                factoryNum = 'MODEL_ID=NO#SERIAL_NUMBER=NO'
 
-        if factoryNum == '':
-            self._button.setFlat(False)
-        else:
-            self._prg_in_proc = True
-            self._status.setText('В процессе    ')
-            self._number_of_points = 0
-            self._status.setStyleSheet('background-color: gray')
+            if factoryNum == '':
+                self._button.setFlat(False)
+            else:
+                self._prgInProc = True
+                self._status.setText('В процессе    ')
+                self._number_of_points = 0
+                self._status.setStyleSheet('background-color: gray')
 
-            check = '0'
-            if self._performChecks:
-                check = '1'
+                check = '0'
+                if self._performChecks:
+                    check = '1'
 
-            self._rpi_thread = QThread()
-            self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 
-                                    self._modemSystem + '#' + factoryNum + '#' + self._modemType+ '#' + check)
-                                    
-            self._rpi_worker.moveToThread(self._rpi_thread)
+                self._rpi_thread = QThread()
+                self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 
+                                        self._modemSystem + '#' + factoryNum + '#' + self._modemType+ '#' + check)
+                                        
+                self._rpi_worker.moveToThread(self._rpi_thread)
 
-            self._rpi_thread.started.connect(self._rpi_worker.run)
-            self._rpi_worker.finished.connect(self._rpi_thread.quit)
-            self._rpi_worker.finished.connect(self._rpi_worker.deleteLater)
-            self._rpi_thread.finished.connect(self._rpi_thread.deleteLater)
+                self._rpi_thread.started.connect(self._rpi_worker.run)
+                self._rpi_worker.finished.connect(self._rpi_thread.quit)
+                self._rpi_worker.finished.connect(self._rpi_worker.deleteLater)
+                self._rpi_thread.finished.connect(self._rpi_thread.deleteLater)
 
-            self._rpi_worker.finished.connect(self._change_rpi_worker_status)
-            self._rpi_worker.progress.connect(self._show_new_log)
-            self._rpi_worker.status.connect(self._change_status)
-            self._rpi_worker.ping.connect(self._ping_callback)
+                self._rpi_worker.finished.connect(self._change_rpi_worker_status)
+                self._rpi_worker.progress.connect(self._show_new_log)
+                self._rpi_worker.status.connect(self._change_status)
+                self._rpi_worker.ping.connect(self._ping_callback)
 
-            self._rpi_thread.start()
+                self._rpi_thread.start()
+        except Exception as ex:
+            logger.error(f"Create_websocket error: {ex}")
 
     def _getFactory(self) -> str:
         FlashNum = 0
@@ -156,7 +159,7 @@ class Workplace(QVBoxLayout):
 
             return string
         except Exception as ex:
-            logger.error(f"_getFactory error: {ex}")
+            logger.error(f"GetFactory error: {ex}")
             self._show_new_log('LogErr', f'Get Programming Number Error: {ex}')
             return ''
 
@@ -196,45 +199,52 @@ class Workplace(QVBoxLayout):
             self._show_new_log('LogErr', f'Update Programming Number Error: {ex}')
 
     def _change_rpi_worker_status(self):
-        self._prg_in_proc = False
+        self._prgInProc = False
         logger.info("Delete WS")
 
     def _ping_rpi(self):
-        if not self._pingingInProc:
-            self._scada_client_ping = ScadaClient(self._wpnumber+1)
-            self._scada_client_ping.finished.connect(self._scada_sended_callback)
-            
-            self._pingingInProc = True
+        try:
+            if not self._pingingInProc:
+                self._scada_client_ping = ScadaClient(self._wpnumber+1)
+                self._scada_client_ping.finished.connect(self._scada_sended_callback)
+                
+                self._pingingInProc = True
 
-            self._rpi_ping_thread = QThread()
-            self._rpi_ping_worker = WebSocketClientChecker(f'sim7600prg{self._wpnumber+1}.local')
-            self._rpi_ping_worker.moveToThread(self._rpi_ping_thread)
+                self._rpi_ping_thread = QThread()
+                self._rpi_ping_worker = WebSocketClientChecker(f'sim7600prg{self._wpnumber+1}.local')
+                self._rpi_ping_worker.moveToThread(self._rpi_ping_thread)
 
-            self._rpi_ping_thread.started.connect(self._rpi_ping_worker.run)
-            self._rpi_ping_worker.finished.connect(self._rpi_ping_thread.quit)
-            self._rpi_ping_worker.finished.connect(self._rpi_ping_worker.deleteLater)
-            self._rpi_ping_thread.finished.connect(self._rpi_ping_thread.deleteLater)
+                self._rpi_ping_thread.started.connect(self._rpi_ping_worker.run)
+                self._rpi_ping_worker.finished.connect(self._rpi_ping_thread.quit)
+                self._rpi_ping_worker.finished.connect(self._rpi_ping_worker.deleteLater)
+                self._rpi_ping_thread.finished.connect(self._rpi_ping_thread.deleteLater)
 
-            self._rpi_ping_worker.finished.connect(self._change_rpi_ping_worker_status)
-            self._rpi_ping_worker.status.connect(self._ping_status_callback)
+                self._rpi_ping_worker.finished.connect(self._change_rpi_ping_worker_status)
+                self._rpi_ping_worker.status.connect(self._ping_status_callback)
 
-            self._rpi_ping_thread.start()
+                self._rpi_ping_thread.start()
+        except Exception as ex:
+            logger.error(f"_ping_rpi error: {ex}")
 
     def _change_rpi_ping_worker_status(self):
         self._pingingInProc = False
         logger.info("Delete WS Checker")
 
     def _btnFlashClickedCallback(self):
-        if not self._button.isFlat():
-            self._button.setFlat(True)
-            self._logfield.clear()
+        try:
+            if not self._button.isFlat():
+                self._button.setFlat(True)
+                self._logfield.clear()
 
-            self._scada_client_work = ScadaClient(self._wpnumber+1)
-            self._scada_client_work.finished.connect(self._scada_sended_callback)
-            self._scada_client_work.SetIMEI(self._currIMEI)
-            self._scada_client_work.SetPrgCnt(self._currPrgCnt)
+                self._scada_client_work = ScadaClient(self._wpnumber+1)
+                self._scada_client_work.finished.connect(self._scada_sended_callback)
+                self._scada_client_work.SetIMEI(self._currIMEI)
+                self._scada_client_work.SetPrgCnt(self._currPrgCnt)
 
-            self._create_websocket()
+                self._create_websocket()
+
+        except Exception as ex:
+            logger.error(f"_btnFlashClickedCallback error: {ex}")       
 
     def _scada_sended_callback(self, res: bool):
         logger.info(f"Scada Sended CallBack: {self._wpnumber}")
@@ -245,106 +255,122 @@ class Workplace(QVBoxLayout):
 
     def _ping_status_callback(self, work_result:bool):
         logger.info(f"Ping CallBack: {self._wpnumber}")
-        if work_result:
-            self._isReady.setText('Программатор готов')
-            self._isReady.setStyleSheet('background-color: green')
-            self._button.setFlat(False)
-            if self.canceled_flag:
-                logger.warning(f'Cancelled flag {self._wpnumber}')
-                self.canceled_flag = False
-                self._clear_screen()
+        try:
+            if work_result:
+                self._isReady.setText('Программатор готов')
+                self._isReady.setStyleSheet('background-color: green')
+                self._button.setFlat(False)
+                if self.canceled_flag:
+                    logger.info(f'Cancelled flag {self._wpnumber}')
+                    self.canceled_flag = False
+                    self._clear_screen()
 
-            if self._firstScadaSending:
-                self._firstScadaSending = False
-                try:
-                    self._scada_client_ping.UpdateInfo('Ready To Start')
-                    if self.usecase == 'scada':
-                        self._scada_client_ping.start()
+                if self._firstScadaSending:
+                    self._firstScadaSending = False
+                    try:
+                        self._scada_client_ping.UpdateInfo('Ready To Start')
+                        if self.usecase == 'scada':
+                            self._scada_client_ping.start()
 
-                except Exception as ex:
-                        logger.error(f"Ping Status Callback error: {ex}")
-        else:
-            self._isReady.setText('Ожидание программатора')
-            self._isReady.setStyleSheet('background-color: gray')
-            self._button.setFlat(True)
+                    except Exception as ex:
+                            logger.error(f"Ping Status Callback error: {ex}")
+            else:
+                self._isReady.setText('Ожидание программатора')
+                self._isReady.setStyleSheet('background-color: gray')
+                self._button.setFlat(True)
+
+        except Exception as ex:
+            logger.error(f"_ping_status_callback error: {ex}")    
         
     def _show_new_log(self, log_level: str, log_msg:str):
-        item = QListWidgetItem(log_msg)
-        if log_level == 'LogOk':
-            item.setForeground(QColor('#7fb94f')) # green
-        elif log_level == 'LogWarn':
-            item.setForeground(QColor('#f0B030')) # yellow
-            try:
-                self._scada_client_work.UpdateInfo(log_msg)
-            except Exception as ex:
-                logger.error(f"Show log LogWarn error: {ex}")
+        try:
+            item = QListWidgetItem(log_msg)
+            if log_level == 'LogOk':
+                item.setForeground(QColor('#7fb94f')) # green
+            elif log_level == 'LogWarn':
+                item.setForeground(QColor('#f0B030')) # yellow
+                try:
+                    self._scada_client_work.UpdateInfo(log_msg)
+                except Exception as ex:
+                    logger.error(f"Show log LogWarn error: {ex}")
 
-        elif log_level == 'LogErr':
-            item.setForeground(QColor('#f00000')) # red
-            try:    
-                self._scada_client_work.UpdateInfo(log_msg)
-            except Exception as ex:
-                logger.warning(f"Show log LogErr error: {ex}")
+            elif log_level == 'LogErr':
+                item.setForeground(QColor('#f00000')) # red
+                try:    
+                    self._scada_client_work.UpdateInfo(log_msg)
+                except Exception as ex:
+                    logger.warning(f"Show log LogErr error: {ex}")
 
-        if 'Start flashing' in log_msg:
-            try:
-                self._scada_client_work.SetStartTime()
-            except Exception as ex:
-                logger.warning(f"Show log start flashing error: {ex}")
+            if 'Start flashing' in log_msg:
+                try:
+                    self._scada_client_work.SetStartTime()
+                except Exception as ex:
+                    logger.warning(f"Show log start flashing error: {ex}")
 
-        if 'FW version:' in log_msg:
-            try:
-                self._scada_client_work.SetFWVersion(log_msg[12:])
-            except Exception as ex:
-                logger.warning(f"Show log FW ver error: {ex}")
-            
-        self._logfield.addItem(item)
-        self._logfield.scrollToBottom()
+            if 'FW version:' in log_msg:
+                try:
+                    self._scada_client_work.SetFWVersion(log_msg[12:])
+                except Exception as ex:
+                    logger.warning(f"Show log FW ver error: {ex}")
+                
+            self._logfield.addItem(item)
+            self._logfield.scrollToBottom()
+
+        except Exception as ex:
+            logger.error(f"_show_new_log error: {ex}")  
 
     def _clear_screen(self):
-        if not self._prg_in_proc:
-            logger.info(f"Clear screen {self._wpnumber}")
-            self._logfield.clear()
-            self._status.setText(' --- ')
-            self._status.setStyleSheet('background-color: gray')
-            self._firstScadaSending = True
-            self._ping_rpi()
+        try:
+            if not self._prgInProc:
+                logger.info(f"Clear screen {self._wpnumber}")
+                self._logfield.clear()
+                self._status.setText(' --- ')
+                self._status.setStyleSheet('background-color: gray')
+                self._firstScadaSending = True
+                self._ping_rpi()
+
+        except Exception as ex:
+            logger.error(f"_clear_screen error: {ex}")  
 
     def _remeberScadaData(self, data: ScadaData):
         self._currIMEI = data.sim_data.IMEI
         self._currPrgCnt = data.sim_data.ProgrammingsCnt
 
     def _change_status(self, work_result:bool):    
-        logger.info(f"Change Status: {self._wpnumber}")
-        if work_result:
-            try:
-                self._scada_client_work.SetCommand('FinishedOK')
-                self._scada_client_work.SetResult(True)
-                if self.usecase == 'scada':
-                    self._scada_client_work.start()
-            except Exception as ex:
-                logger.warning(f"Change_status error: {ex}")
+        try:
+            logger.info(f"Change Status: {self._wpnumber}")
+            if work_result:
+                try:
+                    self._scada_client_work.SetCommand('FinishedOK')
+                    self._scada_client_work.SetResult(True)
+                    if self.usecase == 'scada':
+                        self._scada_client_work.start()
+                except Exception as ex:
+                    logger.warning(f"Change_status error: {ex}")
 
-            if self._needUpdateFactory:
-                self._updateFactory()
+                if self._needUpdateFactory:
+                    self._updateFactory()
 
-            self._status.setText('Успешно')
-            self._status.setStyleSheet('background-color: green')
-        else:
-            try:
-                self._scada_client_work.SetCommand('FinishedNOK')
-                self._scada_client_work.SetResult(False)
-                if self.usecase == 'scada':
-                    self._scada_client_work.start()
-            except Exception as ex:
-                logger.warning(f"Change_status error: {ex}")
+                self._status.setText('Успешно')
+                self._status.setStyleSheet('background-color: green')
+            else:
+                try:
+                    self._scada_client_work.SetCommand('FinishedNOK')
+                    self._scada_client_work.SetResult(False)
+                    if self.usecase == 'scada':
+                        self._scada_client_work.start()
+                except Exception as ex:
+                    logger.warning(f"Change_status error: {ex}")
 
-            self._status.setText('Ошибка')
-            self._status.setStyleSheet('background-color: red')
+                self._status.setText('Ошибка')
+                self._status.setStyleSheet('background-color: red')
 
-        self._button.setFlat(False)
+            self._button.setFlat(False)
 
-        self._ping_rpi()
+            self._ping_rpi()
+
+        except Exception as ex:
+            logger.error(f"_change_status error: {ex}")  
 
     def _ping_callback(self):
         if self._number_of_points == 0:
@@ -373,27 +399,31 @@ class Workplace(QVBoxLayout):
         self._performChecks = perform
 
     def rebootRPI(self):
-        if self._prg_in_proc:
-            logger.warning(f"Cancel task {self._wpnumber}")
-            try:
-                self._rpi_thread.quit()
-                self._prg_in_proc = False
-            except:
-                logger.error("Error in Cancel Task")
-        
-        self._show_new_log('LogInfo', '\nTrying to reboot...\n')
-        self.canceled_flag = True
-
         try:
-            self._proc = subprocess.Popen(
-                f'sudo sshpass -p raspberry ssh pi@sim7600prg{self._wpnumber+1}.local -o StrictHostKeyChecking=no sudo reboot',
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            QTimer.singleShot(4000, self._endRebootRPI) 
+            if self._prgInProc:
+                logger.warning(f"Cancel task {self._wpnumber}")
+                try:
+                    self._rpi_thread.quit()
+                    self._prgInProc = False
+                except:
+                    logger.error("Error in Cancel Task")
+            
+            self._show_new_log('LogInfo', '\nTrying to reboot...\n')
+            self.canceled_flag = True
+
+            try:
+                self._proc = subprocess.Popen(
+                    f'sudo sshpass -p raspberry ssh pi@sim7600prg{self._wpnumber+1}.local -o StrictHostKeyChecking=no sudo reboot',
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                QTimer.singleShot(4000, self._endRebootRPI) 
+            except Exception as ex:
+                self._show_new_log('LogErr', f'Exception: {ex}')
+        
         except Exception as ex:
-            self._show_new_log('LogErr', f'Exception: {ex}')
+            logger.error(f"rebootRPI error: {ex}")  
 
     def _endRebootRPI(self):
         self._clear_screen()

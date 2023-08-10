@@ -26,4 +26,7 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
     window = MainWindow()
-    sys.exit(app.exec())
+    try:
+        sys.exit(app.exec())
+    except Exception as Ex:
+        print(f"StartGateWay app.exec error: {Ex}")

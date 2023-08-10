@@ -5,6 +5,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 import asyncio
 from async_timeout import timeout
 import logging
+import yaml
 
 logs_path = "/home/pi/GatewayLogs"
 logger = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ class ScadaClient(QThread):
         self._KU = KU
         logger.info(f"Init client KU: {self._KU}")
         self._info = []
+        self._config = yaml.load(open("/home/pi/ScadaToRpiGateway/configuration.yml"), yaml.SafeLoader)
+        self._ip = self._config['gateway_client_ip']
 
         data_dict = {
             "IMEI": "",
@@ -59,33 +62,38 @@ class ScadaClient(QThread):
         self._data_to_send.sim_data.ProgrammingsCnt = prgcnt
 
     async def _send(self):
-        self._data_to_send.SetEndTime()
+        try:
+            if not self._data_to_send.sim_data.StartProgramming:
+                self._data_to_send.SetStartTime()
 
-        self._data_to_send.sim_data.Info = str(self._info)
+            self._data_to_send.SetEndTime()
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            result = False
-            for i in range(3):
-                try:
-                    sock.connect(('192.168.88.231', 8080))
-                    sock.send(self._data_to_send.GetDataInBytes())
-                    data_to_recv = sock.recv(1024)
+            self._data_to_send.sim_data.Info = str(self._info)
 
-                    scada_data_recv = ScadaData()
-                    scada_data_recv.SetDataFromBytes(data_to_recv)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                result = False
+                for i in range(3):
+                    try:
+                        sock.connect((self._ip, 8080))
+                        sock.send(self._data_to_send.GetDataInBytes())
+                        data_to_recv = sock.recv(1024)
+                        scada_data_recv = ScadaData()
+                        scada_data_recv.SetDataFromBytes(data_to_recv)
+                        logger.info(f"Finished Emit True {self._data_to_send.sim_data.KU}")
+                        self.finished.emit(True)
+                        result = True
+                        break
+                    except Exception as ex:
+                        logger.warning(f"Programmer cliend recv\send warn: {ex}")
 
-                    logger.warning(f"Finished Emit True {self._data_to_send.sim_data.KU}")
-                    self.finished.emit(True)
-                    result = True
-                    break
-                except Exception as ex:
-                    logger.info(ex)
+                    await asyncio.sleep(0.5)
 
-                await asyncio.sleep(0.5)
-
-            if not result:
-                logger.warning(f"Finished Emit False {self._data_to_send.sim_data.KU}")
-                self.finished.emit(False)
+                if not result:
+                    logger.warning(f"Finished Emit False {self._data_to_send.sim_data.KU}")
+                    self.finished.emit(False)
+                    
+        except Exception as ex:
+            logger.error(f"Programmer Client error: {ex}")
 
     def run(self) -> None:
         asyncio.run(self._send())    
