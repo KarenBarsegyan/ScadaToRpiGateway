@@ -45,7 +45,8 @@ class FileBrowser(QWidget):
 
     def getFile(self):     
         filepath = QFileDialog.getExistingDirectory(self, caption='Choose Directory',
-                                                    directory=self.dirpath)
+                                                    directory=self.dirpath,
+                                                    options = QFileDialog.ReadOnly)
         self.setPath(filepath)
         self._CallbackFunc()
 
