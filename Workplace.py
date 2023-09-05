@@ -26,6 +26,13 @@ f_handler.setFormatter(f_format)
 logger.addHandler(f_handler)
 logger.setLevel(logging.WARNING)
 
+result_logger = logging.getLogger('FLASH LOGS')
+result_f_handler = logging.FileHandler(f'{logs_path}/FLASH_LOGS.log')
+result_f_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+result_f_handler.setFormatter(result_f_format)
+result_logger.addHandler(result_f_handler)
+result_logger.setLevel(logging.INFO)
+
 
 class Workplace(QVBoxLayout):
     def __init__(self, wp_number):
@@ -38,6 +45,7 @@ class Workplace(QVBoxLayout):
         self._PrgCnt = ''
         self._modemSystem = ''
         self._modemType = ''
+        self._modemCommand = ''
         self._pingingInProc = False
         self._prgInProc = False
         self.canceled_flag = False
@@ -85,10 +93,10 @@ class Workplace(QVBoxLayout):
 
     def _create_websocket(self):
         try:
-            if self._modemType != 'Retrofit':
+            if self._modemType == 'Simple':
                 factoryNum = self._getFactory() 
                 self._needUpdateFactory = True
-            else:
+            elif self._modemType == 'Retrofit':
                 self._needUpdateFactory = False
                 factoryNum = 'MODEL_ID=NO#SERIAL_NUMBER=NO'
 
@@ -105,8 +113,8 @@ class Workplace(QVBoxLayout):
                     check = '1'
 
                 self._rpi_thread = QThread()
-                self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', 
-                                        self._modemSystem + '#' + factoryNum + '#' + self._modemType+ '#' + check)
+                self._modemCommand = self._modemSystem + '#' + factoryNum + '#' + self._modemType+ '#' + check
+                self._rpi_worker = WebSocketClient(f'sim7600prg{self._wpnumber+1}.local', self._modemCommand)
                                         
                 self._rpi_worker.moveToThread(self._rpi_thread)
 
@@ -195,7 +203,7 @@ class Workplace(QVBoxLayout):
                 json.dump(data, outfile)
 
         except Exception as ex:
-            logger.error(f"_updateFactory error: ", ex)
+            logger.error(f"_updateFactory error: {ex}")
             self._show_new_log('LogErr', f'Update Programming Number Error: {ex}')
 
     def _change_rpi_worker_status(self):
@@ -299,7 +307,7 @@ class Workplace(QVBoxLayout):
                 try:    
                     self._scada_client_work.UpdateInfo(log_msg)
                 except Exception as ex:
-                    logger.warning(f"Show log LogErr error: {ex}")
+                    logger.info(f"Show log LogErr error: {ex}")
 
             if 'Start flashing' in log_msg:
                 try:
@@ -338,7 +346,6 @@ class Workplace(QVBoxLayout):
 
     def _change_status(self, work_result:bool):    
         try:
-            logger.info(f"Change Status: {self._wpnumber}")
             if work_result:
                 try:
                     self._scada_client_work.SetCommand('FinishedOK')
@@ -366,6 +373,9 @@ class Workplace(QVBoxLayout):
                 self._status.setStyleSheet('background-color: red')
 
             self._button.setFlat(False)
+
+            result_logger.info("Command to Flasher: " + str(self._modemCommand) + '\n' +
+                               str(self._scada_client_work.GetData()) + '\n')
 
             self._ping_rpi()
 

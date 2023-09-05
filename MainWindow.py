@@ -56,6 +56,7 @@ class MainWindow(QMainWindow):
         self._simprgVersionWidget = QLineEdit(f"")
         self._simprgVersionWidget.setReadOnly(True)
         self._simprgVersionWidget.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self._simprgVersionWidget.setMaximumWidth(200)
         self._simprgVersionWidget.setMaximumWidth(500)
 
         self._modemSystemChoice = FileBrowser('Choose Modem System: ')
@@ -64,11 +65,11 @@ class MainWindow(QMainWindow):
 
         modemTypeLabel = QLabel("Modem Type: ")
 
-        self._modemTypeChoice = QComboBox()
-        self._modemTypeChoice.addItem("Simple")
-        self._modemTypeChoice.addItem("Retrofit")
-        self._modemTypeChoice.setMinimumWidth(100)
-        self._modemTypeChoice.currentIndexChanged.connect(self._modemTypeChoosenCallback)
+        self._modemTypeChoice = QLineEdit(f"")
+        self._modemTypeChoice.setReadOnly(True)
+        self._modemTypeChoice.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self._modemTypeChoice.setMaximumWidth(120)
+        self._modemTypeChoice.setMaximumWidth(500)
 
         spaceLabel = QLabel("")
         spaceLabel.setMinimumWidth(50)
@@ -111,7 +112,6 @@ class MainWindow(QMainWindow):
         self._uiJoin()
 
         self._systemChoosenCallback()
-        self._modemTypeChoosenCallback()
         self._performTestsChanged()
         
         self._createScadaServer()
@@ -182,8 +182,24 @@ class MainWindow(QMainWindow):
                     with open(f'/home/pi/apt-repo/system/{self._modemSystemChoice.getPath()}/../prg_cnt', 'w') as outfile:
                         json.dump(data, outfile)
 
-            for wp_num in range(0, self.chipQty):
-                self._wp[wp_num].remeberModemSystem(self._modemSystemChoice.getPath())
+            modemTypeStr = self._modemSystemChoice.getPath()
+            modemTypeStr = modemTypeStr[:modemTypeStr.index('/')]
+            modemTypeStr = modemTypeStr[7:]
+
+            if modemTypeStr == 'simple':
+                self._modemType = 'Simple'
+                self._modemTypeChoice.setText('Simple with factory')
+            elif modemTypeStr == 'retro':
+                self._modemType = 'Retrofit'
+                self._modemTypeChoice.setText('Retrofit NO factory')
+            else:
+                self._modemType = ''
+                self._modemTypeChoice.setText('Wrong Folder Name')
+
+            if self._modemType != '':
+                for wp_num in range(0, self.chipQty):
+                    self._wp[wp_num].remeberModemSystem(self._modemSystemChoice.getPath())
+                    self._wp[wp_num].remeberModemType(self._modemType)
         
         except Exception as ex:
             logger.error(f"_systemChoosenCallback error: {ex}")
@@ -220,28 +236,6 @@ class MainWindow(QMainWindow):
     def _btnClearClickedCallbackTimeout(self):
         self._clearButton.setFlat(False)
 
-    def _modemTypeChoosenCallback(self):
-        try:
-            self._modemType = self._modemTypeChoice.currentText()
-
-            if self._firstTimeType:
-                self._firstTimeType = False
-                with open(r'/home/pi/GateWaySettings/modem_type_choice') as file:
-                    modemType = file.readline()
-
-                    for i in range(self._modemTypeChoice.count()):
-                        if modemType == self._modemTypeChoice.itemText(i):
-                            self._modemTypeChoice.setCurrentIndex(i)
-
-            with open(r'/home/pi/GateWaySettings/modem_type_choice', 'w') as file:
-                file.write(self._modemTypeChoice.currentText())
-
-            for wp_num in range(0, self.chipQty):
-                self._wp[wp_num].remeberModemType(self._modemType)
-
-        except Exception as ex:
-            logger.error(f"_modemTypeChoosenCallback error: {ex}")
-
     def _performTestsChanged(self):
         try:
             if self._firstTimePerformCheck:
@@ -263,3 +257,4 @@ class MainWindow(QMainWindow):
 
         except Exception as ex:
             logger.error(f"_performTestsChanged error: {ex}")
+

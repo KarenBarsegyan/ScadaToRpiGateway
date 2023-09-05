@@ -61,6 +61,13 @@ class ScadaClient(QThread):
     def SetPrgCnt(self, prgcnt):
         self._data_to_send.sim_data.ProgrammingsCnt = prgcnt
 
+    def GetData(self):
+        data = {"IMEI": self._data_to_send.sim_data.IMEI,
+                "KU_NUM": self._data_to_send.sim_data.KU,
+                "Result": self._data_to_send.sim_data.Result,
+                "Messages": self._info}
+        return data
+
     async def _send(self):
         try:
             if not self._data_to_send.sim_data.StartProgramming:
@@ -84,12 +91,12 @@ class ScadaClient(QThread):
                         result = True
                         break
                     except Exception as ex:
-                        logger.warning(f"Programmer cliend recv\send warn: {ex}")
+                        logger.info(f"Programmer cliend recv\send warn: {ex}")
 
                     await asyncio.sleep(0.5)
 
                 if not result:
-                    logger.warning(f"Finished Emit False {self._data_to_send.sim_data.KU}")
+                    logger.info(f"Finished Emit False {self._data_to_send.sim_data.KU}")
                     self.finished.emit(False)
                     
         except Exception as ex:
